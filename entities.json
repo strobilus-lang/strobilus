@@ -1,0 +1,12 @@
+[
+    {
+        "uid": {
+            "type": "Store",
+            "id": "pippo_a"
+        },
+        "attrs": {
+            "counter": 0
+        },
+        "parents": []
+    }
+]
