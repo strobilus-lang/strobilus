@@ -1,11 +1,11 @@
 [
     {
         "uid": {
-            "type": "Store",
-            "id": "pippo_a"
+            "type": "User",
+            "id": "max"
         },
         "attrs": {
-            "counter": 0
+            "counter": 10
         },
         "parents": []
     }
