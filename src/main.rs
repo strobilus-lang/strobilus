@@ -3,7 +3,6 @@ use cedar_policy::*;
 use clap::Parser;
 
 mod parser;
-use parser::*;
 
 /// Simple PoC of Cedar with state
 #[derive(Parser, Debug)]
@@ -27,27 +26,34 @@ struct Args {
 
     /// Path of the entites
     #[arg(long, default_value = "entities.json")]
-    entities_path: String
+    entities_path: String,
+
+    // Path of the rules
+    #[arg(long, default_value = "rules.strobilus")]
+    rules_path: String
 }
 
-fn read_policy(filename: impl AsRef<Path>) -> Result<(PolicySet, Vec<StrobilusRule>), Box<dyn std::error::Error>> {
+fn read_policy(filename: impl AsRef<Path>) -> Result<PolicySet, Box<dyn std::error::Error>> {
     let file_content = std::fs::read_to_string(filename)?;
-    let parser_result = parser::parse_strobilus(&file_content);
-    PolicySet::from_str(&parser_result.code).map(|policy_set| (policy_set, parser_result.rules)).map_err(Into::into)
+    PolicySet::from_str(&file_content).map_err(Into::into)
 }
 
 fn read_entities(filename: impl AsRef<Path>) -> Result<Entities, Box<dyn std::error::Error>> {
     let file = File::open(filename)?;
     Entities::from_json_file(file, None).map_err(Into::into)
+}
 
+fn read_rules(filename: impl AsRef<Path>) -> Result<parser::EffectTable, Box<dyn std::error::Error>> {
+    let file_content = std::fs::read_to_string(filename)?;
+    Ok(parser::parse_strobilus(&file_content))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    let (policy_set, strobilus_rules) = read_policy(args.policy_path)?;
-
-    println!("{:?}", strobilus_rules);
+    let policy_set = read_policy(args.policy_path)?;
+    let rules = read_rules(args.rules_path)?;
+    println!("{:?}", rules);
 
     let action = args.action.parse()?;
     let principal = args.principal.parse()?;
