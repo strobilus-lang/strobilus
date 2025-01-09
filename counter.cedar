@@ -6,5 +6,3 @@ permit(
 ) unless {
     principal.counter <= 0
 };
-
-on e1 do { counter:= counter + 1 };
