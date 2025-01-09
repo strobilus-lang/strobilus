@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 cedar-policy = { version = "4.2.2", features = ["partial-eval"] }
 clap = { version = "4.5.23", features = ["derive"] }
+regex = "1.11.1"

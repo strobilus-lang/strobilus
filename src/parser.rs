@@ -1,33 +1,23 @@
-type CedarCode = String;
+use regex::Regex;
+use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
-pub struct StrobilusRule {
-    pub event: String, // Event name of the associate rule, must be unique
-    pub action: String, // Action name of the associate rule
-}
+pub type EffectTable = HashMap<String, String>;
 
-#[derive(Debug, Clone)]
-pub struct ParserResult {
-    pub code: CedarCode,
-    pub rules: Vec<StrobilusRule>,
-}
+// pub struct StrobilusRule {
+//     pub event: String,  // Event name of the associate rule, must be unique
+//     pub action: String, // Action name of the associate rule
+// }
 
 // TODO: Use a real parser for handle grammar of Strobilus code
-pub fn parse_strobilus(input: &str) -> ParserResult {
-    let mut code = String::new();
-    let mut rules = Vec::new();
+pub fn parse_strobilus(input: &str) -> EffectTable {
+    let mut rules = EffectTable::new();
+    let re = Regex::new(r"on\s+(\w+)\s+do\s+\{\s*([\s\S]*?)\s*\}").unwrap();
 
-    for line in input.lines() {
-        if line.starts_with("on") {
-            let mut parts = line.split_whitespace();
-            let _ = parts.next(); // Skip "on"
-            let event = parts.next().unwrap().to_string();
-            let action: String = parts.collect::<Vec<&str>>().join(" ");
-            rules.push(StrobilusRule { event, action });
-        } else {
-            code.push_str(line);
-        }
+    if let Some(captures) = re.captures(input) {
+        let event = captures[1].to_string();
+        let action = captures[2].to_string();
+        rules.insert(event, action);
     }
 
-    ParserResult { code, rules }
+    rules
 }
