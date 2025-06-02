@@ -3,6 +3,7 @@ use cedar_policy::*;
 use clap::Parser;
 
 mod parser;
+mod entity_store;
 
 /// Simple PoC of Cedar with state
 #[derive(Parser, Debug)]
