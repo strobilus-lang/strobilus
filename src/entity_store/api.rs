@@ -12,6 +12,8 @@ pub enum EntityStoreError {
 }
 
 pub trait EntityStore {
+    fn entities(&self) -> cedar_policy::Entities;
+
     fn update_entity(&mut self, uid: EntityUid, attrs: HashMap<String, RestrictedExpression>, parents: HashSet<EntityUid>) -> Result<(), EntityStoreError>;
     fn remove_entity(&mut self, uid: &EntityUid) -> Result<(), EntityStoreError>;
 

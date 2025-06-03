@@ -1,4 +1,4 @@
-use cedar_policy::{Entity, EntityUid, RestrictedExpression};
+use cedar_policy::{Entities, Entity, EntityUid, RestrictedExpression};
 
 use super::api::{EntityStore, EntityStoreError};
 use std::collections::{HashMap, HashSet};
@@ -12,6 +12,21 @@ impl InMemoryEntityStore {
         Self {
             entities: HashMap::new(),
         }
+    }
+
+    pub fn from_entities(&mut self, entities: cedar_policy::Entities) -> Self {
+        for entity in entities.into_iter() {
+            self.entities.insert(entity.uid(), entity);
+        }
+
+        Self {
+            entities: self.entities.clone(),
+        }
+    }
+
+    pub fn entites(&self) -> Entities {
+        Entities::from_entities(self.entities.values().cloned(), None)
+            .expect("Failed to convert entities")
     }
 
     fn insert_entity(
@@ -103,5 +118,9 @@ impl EntityStore for InMemoryEntityStore {
         attrs.remove(key);
 
         self.insert_entity(&_uid, attrs, ancestors)
+    }
+    
+    fn entities(&self) -> cedar_policy::Entities {
+        self.entites()
     }
 }
