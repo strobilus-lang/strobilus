@@ -4,6 +4,8 @@ use clap::Parser;
 
 mod parser;
 mod entity_store;
+mod policy_engine;
+mod authorization;
 
 /// Simple PoC of Cedar with state
 #[derive(Parser, Debug)]
