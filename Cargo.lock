@@ -1052,6 +1052,7 @@ name = "strobilus"
 version = "0.1.0"
 dependencies = [
  "cedar-policy",
+ "cedar-policy-core",
  "clap",
  "regex",
  "thiserror 2.0.12",
