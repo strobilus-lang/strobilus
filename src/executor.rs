@@ -50,7 +50,7 @@ impl Executor {
                                 "Error when first argument of updateAttribute is not an EntityUID"
                             ),
                         },
-                        (_, _) => todo!("Error when argoments of updateAttribute are not corret"),
+                        (_, _) => todo!("Error when arguments of updateAttribute are not corret"),
                     };
                 Ok(())
             }

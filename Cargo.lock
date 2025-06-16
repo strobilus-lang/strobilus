@@ -171,7 +171,7 @@ dependencies = [
  "cedar-policy-core",
  "cedar-policy-formatter",
  "cedar-policy-validator",
- "itertools",
+ "itertools 0.13.0",
  "lalrpop-util",
  "lazy_static",
  "miette",
@@ -192,7 +192,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82426ffab9728d7fffc9eb0b574215c1b3b112b13c9877e63a9322018dc5c847"
 dependencies = [
  "either",
- "itertools",
+ "itertools 0.13.0",
  "lalrpop",
  "lalrpop-util",
  "lazy_static",
@@ -216,7 +216,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28c1ddaa5e08e193d42f70dbfd447790c9f0bec24e76f0d3ed0424181f655107"
 dependencies = [
  "cedar-policy-core",
- "itertools",
+ "itertools 0.13.0",
  "lazy_static",
  "logos",
  "miette",
@@ -232,7 +232,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55ef5924ac6f2d366a0d33a90c06750a19d3fb1ea03dccb53c53c0de304def19"
 dependencies = [
  "cedar-policy-core",
- "itertools",
+ "itertools 0.13.0",
  "lalrpop",
  "lalrpop-util",
  "lazy_static",
@@ -422,9 +422,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "fixedbitset"
-version = "0.4.2"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "fnv"
@@ -542,6 +542,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -568,14 +577,14 @@ dependencies = [
 
 [[package]]
 name = "lalrpop"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06093b57658c723a21da679530e061a8c25340fa5a6f98e313b542268c7e2a1f"
+checksum = "ba4ebbd48ce411c1d10fb35185f5a51a7bfa3d8b24b4e330d30c9e3a34129501"
 dependencies = [
  "ascii-canvas",
  "bit-set",
  "ena",
- "itertools",
+ "itertools 0.14.0",
  "lalrpop-util",
  "petgraph",
  "pico-args",
@@ -590,9 +599,9 @@ dependencies = [
 
 [[package]]
 name = "lalrpop-util"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feee752d43abd0f4807a921958ab4131f692a44d4d599733d4419c5d586176ce"
+checksum = "b5baa5e9ff84f1aefd264e6869907646538a52147a755d494517a8007fb48733"
 dependencies = [
  "regex-automata",
  "rustversion",
@@ -747,9 +756,9 @@ dependencies = [
 
 [[package]]
 name = "petgraph"
-version = "0.6.5"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
+checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset",
  "indexmap 2.7.0",
@@ -1054,6 +1063,8 @@ dependencies = [
  "cedar-policy",
  "cedar-policy-core",
  "clap",
+ "lalrpop",
+ "lalrpop-util",
  "regex",
  "thiserror 2.0.12",
 ]

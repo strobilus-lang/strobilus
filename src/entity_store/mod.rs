@@ -86,11 +86,13 @@ impl EntityStore {
         val: Value,
     ) -> Result<(), EntityStoreError> {
         if let Some(entity) = self.entities.get_mut(uid) {
+            //println!("--- Considering attr {}", attr);
             if let Some(_existing_value) = entity.get(attr) {
                 // You cannot assign directly to &existing_value since it's an immutable reference.
                 // Instead, update the entity's attribute map and re-insert the entity.
                 let (uid, mut attrs, ancestors, _tags) = entity.clone().into_inner();
                 attrs.insert(attr.into(), val.into());
+                println!("--- Updating attribute: {} for entity: {:?}", attr, uid);
                 self.entities.insert(
                     uid.clone(),
                     Entity::new_with_attr_partial_value(uid, attrs, ancestors)
@@ -99,6 +101,7 @@ impl EntityStore {
             } else {
                 let (_, mut attrs, ancestors, _tags) = entity.clone().into_inner();
                 attrs.insert(attr.into(), val.into());
+                 println!("--- Creating attribute: {} for entity: {:?}", attr, uid);
                 self.entities.insert(
                     uid.clone(),
                     Entity::new_with_attr_partial_value(uid.clone(), attrs, ancestors)

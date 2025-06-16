@@ -1,5 +1,8 @@
+use crate::{executor::commands::update_attribute_command_1, parser::parse_command};
+
 mod entity_store;
 mod executor;
+mod parser;
 
 /* fn read_policy(filename: impl AsRef<Path>) -> Result<PolicySet, Box<dyn std::error::Error>> {
     let file_content = std::fs::read_to_string(filename)?;
@@ -14,7 +17,8 @@ mod executor;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //let args = Args::parse();
 
-/*     let policy_set = read_policy(args.policy_path)?;
+    /*
+    let policy_set = read_policy(args.policy_path)?;
     let rules = read_rules(args.rules_path)?;
     println!("{:?}", rules);
 
@@ -25,8 +29,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let entities = read_entities(args.entities_path)?;
 
-    println!("{:?}", entities);
-    let authorizer = Authorizer::new();
+    // TODO: Refactor Authorizer to use cedar_policy_core crate.
+    // let authorizer = authorization::Authorizer::new(policy_set, entities);
     let answer = authorizer.is_authorized_partial(&request, &policy_set, &entities);
 
     for policy in answer.all_residuals() {
@@ -38,20 +42,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("-- Associate event: {:?}", policy.annotation("evt"));
         }
     }
- 
-    println!("Final decision {:?}", answer.concretize().decision()); */
 
-    //let policy_set = read_policy(args.policy_path)?;
-    //let rules = read_rules(args.rules_path)?;
-
-    /* let action = args.action;
-    let principal = args.principal;
-    let resource = args.resource; */
-
-    //let entities = read_entities(args.entities_path)?;
-
-    // TODO: Refactor Authorizer to use cedar_policy_core crate.
-    //let authorizer = authorization::Authorizer::new(policy_set, entities);
+    println!("Final decision {:?}", answer.concretize().decision());
+    */
 
     let data = r#"
             [
@@ -68,12 +61,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ]
         "#;
 
-    let mut executor= executor::Executor::with_entity_store(data)?;
+    let mut executor = executor::Executor::with_entity_store(data)?;
 
-    println!("--- Entity store BEFORE: {:?}", executor.clone().entity_store());
+    println!(
+        "--- Entity store BEFORE: {:?}",
+        executor.clone().entity_store()
+    );
 
-    let command = executor::commands::update_attribute_command_1();
-    //let command = executor::commands::update_attribute_command_2();
+    //let command = executor::commands::update_attribute_command_1();
+    let command: executor::commands::Command =
+        parse_command(r#"updateAttribute(principal, "counter", principal.counter - 1)"#)?
+            .as_inner()
+            .ok_or("Failed to parse command")?
+            .clone()
+            .into();
+
+    println!("-- Command {:?}", command);
 
     let _ = &executor.execute::<()>(command)?;
 
