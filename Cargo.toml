@@ -1,15 +1,5 @@
-[package]
-name = "strobilus"
-version = "0.1.0"
-edition = "2021"
-
-[build-dependencies]
-lalrpop = "0.22.2"
-
-[dependencies]
-cedar-policy = { version = "4.2.2", features = ["partial-eval"] }
-cedar-policy-core = "4.2.2"
-clap = { version = "4.5.23", features = ["derive"] }
-lalrpop-util = "0.22.2"
-regex = "1.11.1"
-thiserror = "2.0.12"
+[workspace]
+resolver = "2"
+members = [
+    "crates/strobilus-core"
+]

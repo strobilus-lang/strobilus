@@ -1,0 +1,13 @@
+[package]
+name = "strobilus-core"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+lalrpop = "0.22.2"
+
+[dependencies]
+cedar-policy-core = "4.2.2"
+lalrpop-util = "0.22.2"
+regex = "1.11.1"
+thiserror = "2.0.12"

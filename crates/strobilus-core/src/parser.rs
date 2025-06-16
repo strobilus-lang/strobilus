@@ -6,7 +6,7 @@ use lalrpop_util::lalrpop_mod;
 pub mod err;
 pub mod cst;
 
-lalrpop_mod!(pub grammar);
+lalrpop_mod!(grammar);
 
 pub fn parse_command(input: &str) -> Result<Node<Option<cst::Command>>, err::RawParseError> {
     let parser = grammar::CommandParser::new();

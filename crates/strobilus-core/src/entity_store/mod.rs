@@ -41,13 +41,13 @@ impl EntityStore {
         })
     }
 
-    pub fn entities(&self) -> Result<Entities, cedar_policy::entities_errors::EntitiesError> {
-        Entities::from_entities(
+    pub fn entities(&self) -> Result<Entities, Box<dyn std::error::Error>> {
+        Ok(Entities::from_entities(
             self.entities.values().cloned(),
             None::<&NoEntitiesSchema>,
             cedar_policy_core::entities::TCComputation::ComputeNow,
             Extensions::none(),
-        )
+        )?)
     }
 
     pub fn update_entity(
