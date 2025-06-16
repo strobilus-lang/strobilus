@@ -1,4 +1,4 @@
-pub(crate) mod commands;
+pub mod commands;
 
 use std::{str::FromStr, sync::Arc};
 
