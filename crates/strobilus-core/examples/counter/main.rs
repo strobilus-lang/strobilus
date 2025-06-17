@@ -1,4 +1,4 @@
-use strobilus_core::{executor::{self}, parser::parse_command};
+use strobilus_core::{executor, parser::parse_command, ast::lower_command};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //let args = Args::parse();
@@ -55,12 +55,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     //let command = executor::commands::update_attribute_command_1();
-    let command: executor::commands::Command =
+    let cst_command =
         parse_command(r#"updateAttribute(principal, "counter", principal.counter - 1)"#)?
             .as_inner()
             .ok_or("Failed to parse command")?
-            .clone()
-            .into();
+            .clone();
+
+    let command = lower_command(cst_command);
 
     println!("-- Command {:?}", command);
 

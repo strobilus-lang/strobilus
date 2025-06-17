@@ -1,12 +1,8 @@
-pub mod commands;
-
 use std::{str::FromStr, sync::Arc};
-
 use cedar_policy_core::{ast::{EntityUID, EntityUIDEntry, Expr, Literal, Request, SlotEnv, Value, ValueKind}, evaluator::Evaluator, extensions::Extensions};
 
 use crate::{
-    entity_store::EntityStore,
-    executor::commands::{Command, CommandKind},
+    ast::{command::CommandKind, Command}, entity_store::EntityStore
 };
 
 #[derive(Debug, Clone)]

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use cedar_policy_core::parser::Node;
 use lalrpop_util::lalrpop_mod;
 
-pub mod err;
 pub mod cst;
+mod err;
 
 lalrpop_mod!(grammar);
 
