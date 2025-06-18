@@ -21,7 +21,7 @@ use lalrpop_util::{ParseError, ErrorRecovery};
 
 use cedar_policy_core::parser::*;
 use cedar_policy_core::parser::Node;
-use crate::parser::cst::Command;
+use crate::parser::cst::Command as CstCommand;
 use crate::parser::err::{RawErrorRecovery, RawUserError};
 
 
@@ -84,17 +84,29 @@ match {
     "!",
     "=",
 
-    // Command operators
+    // Basic command operators
     "updateAttribute" => UPDATEATTRIBUTE,
 }
 
-// Commands
-pub Command: Node<Option<crate::parser::cst::Command>> = {
+BasicCommand: Node<Option<CstCommand>> = {
     <l:@L>
     UPDATEATTRIBUTE
-    "(" <e1: Expr> "," <field: STRINGLIT> "," <e2: Expr> ")"
+    "(" <e1: Expr> "," <s: Str> "," <e2: Expr> ")"
     <r:@R>
-    => Node::with_source_loc(Some(crate::parser::cst::Command::updateAttribute(e1, cst::Str::String(field[1..(field.len() - 1)].into()), e2)), Loc::new(l..r, Arc::clone(src)))
+    => Node::with_source_loc(Some(CstCommand::UpdateAttribute(e1, s, e2)), Loc::new(l..r, Arc::clone(src))),
+}
+
+// Commands
+pub Command: Node<Option<CstCommand>> = {
+    <l:@L>
+    <bc: BasicCommand>
+    <r:@R>
+    => bc,
+    // TODO: error
+    <l:@L>
+    <c1: Command> ";" <c2: Command>
+    <r:@R>
+    => Node::with_source_loc(Some(CstCommand::Sequence(Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
 }
 
 Comma<E>: Vec<E> = {
@@ -105,27 +117,9 @@ Comma<E>: Vec<E> = {
     },
 }
 
-// Policies := {Policy}
-pub Policies: Node<Option<cst::Policies>> = {
-    <l:@L> <ps:Policy*> <r:@R> => Node::with_source_loc(Some(cst::Policies(ps)), Loc::new(l..r, Arc::clone(src))),
-}
-
 // Annotations := {'@' Ident '(' String ')'}
 Annotation: Node<Option<cst::Annotation>> = {
     <l:@L> "@" <key:AnyIdent> <value: ("(" <Str> ")")?> <r:@R> => Node::with_source_loc(Some(cst::Annotation{key,value}), Loc::new(l..r, Arc::clone(src)))
-}
-
-// Policy := "label" ('permit' | 'forbid') '(' {VariableDef} ')' {Cond} ;
-pub Policy: Node<Option<cst::Policy>> = {
-    <l:@L>
-    <annotations:Annotation*>
-    <effect:AnyIdent>
-    "(" <variables: Comma<VariableDef>> ")"
-    <conds:Cond*>
-    ";"
-    <r:@R>
-    => Node::with_source_loc(Some(cst::Policy{ annotations,effect,variables,conds }), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> <err:!> ";" <r:@R> => { errors.push(err); Node::with_source_loc(None, Loc::new(l..r, Arc::clone(src))) },
 }
 
 // VariableDef := Variable [':' Name] ['is' Add] [('in' | '==') Expr]
@@ -412,6 +406,7 @@ Literal: Node<Option<cst::Literal>> = {
     <l:@L> <s:Str> <r:@R>
         => Node::with_source_loc(Some(cst::Literal::Str(s)), Loc::new(l..r, Arc::clone(src))),
 }
+
 Str: Node<Option<cst::Str>> = {
     <l:@L> <s:STRINGLIT> <r:@R>
         => Node::with_source_loc(Some(cst::Str::String(s[1..(s.len() - 1)].into())), Loc::new(l..r, Arc::clone(src))),
