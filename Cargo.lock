@@ -825,6 +825,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "strobilus"
+version = "0.1.0"
+dependencies = [
+ "cedar-policy-core",
+ "strobilus-core",
+]
+
+[[package]]
 name = "strobilus-core"
 version = "0.1.0"
 dependencies = [

@@ -1,5 +1,9 @@
 [workspace]
 resolver = "2"
-members = [
+
+members = [ "crates/strobilus",
     "crates/strobilus-core"
 ]
+
+[workspace.dependencies]
+cedar-policy-core = { version = "4.2.2"} 

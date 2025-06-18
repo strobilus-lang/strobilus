@@ -1,0 +1,8 @@
+[package]
+name = "strobilus"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cedar-policy-core = { workspace = true }
+strobilus-core = { path = "../strobilus-core"}
