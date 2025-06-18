@@ -1,4 +1,4 @@
-use strobilus_core::{executor, parser::parse_command, ast::lower_command};
+use strobilus_core::{ast::lower_command, executor, parser::parse_command};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //let args = Args::parse();
@@ -33,19 +33,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     */
 
     let data = r#"
-            [
-                {
-                    "uid": {
-                        "type": "User",
-                        "id": "max"
-                    },
-                    "attrs": {
-                        "counter": 10
-                    },
-                    "parents": []
-                }
-            ]
-        "#;
+        [
+            {
+                "uid": {
+                    "type": "User",
+                    "id": "max"
+                },
+                "attrs": {
+                    "counter": 10
+                },
+                "parents": []
+            }
+        ]
+    "#;
+
+    let program = r#"
+        updateAttribute(principal, "counter", principal.counter - 1)^
+        updateAttribute(principal, "counter", principal.counter - 1)
+    "#;
 
     let mut executor = executor::Executor::with_entity_store(data)?;
 
@@ -55,13 +60,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     //let command = executor::commands::update_attribute_command_1();
-    let cst_command =
-        parse_command(r#"updateAttribute(principal, "counter", principal.counter - 1)"#)?
-            .as_inner()
-            .ok_or("Failed to parse command")?
-            .clone();
+    let cst_command = parse_command(program)?;
 
-    let command = lower_command(cst_command);
+    let command = lower_command(cst_command)?;
 
     println!("-- Command {:?}", command);
 

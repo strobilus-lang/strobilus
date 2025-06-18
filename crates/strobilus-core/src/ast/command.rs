@@ -3,6 +3,7 @@ use cedar_policy_core::ast::Expr;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandKind<T = ()> {
     UpdateAttribute(Expr<T>, String, Expr<T>),
+    Sequence(Box<Command<T>>, Box<Command<T>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

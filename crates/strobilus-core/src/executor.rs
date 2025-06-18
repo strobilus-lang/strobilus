@@ -1,8 +1,13 @@
+use cedar_policy_core::{
+    ast::{EntityUID, EntityUIDEntry, Expr, Literal, Request, SlotEnv, Value, ValueKind},
+    evaluator::Evaluator,
+    extensions::Extensions,
+};
 use std::{str::FromStr, sync::Arc};
-use cedar_policy_core::{ast::{EntityUID, EntityUIDEntry, Expr, Literal, Request, SlotEnv, Value, ValueKind}, evaluator::Evaluator, extensions::Extensions};
 
 use crate::{
-    ast::{command::CommandKind, Command}, entity_store::EntityStore
+    ast::{command::CommandKind, Command},
+    entity_store::EntityStore,
 };
 
 #[derive(Debug, Clone)]
@@ -34,22 +39,30 @@ impl Executor {
     pub fn execute<T>(&mut self, command: Command<()>) -> Result<(), Box<dyn std::error::Error>> {
         match command.inner_kind() {
             CommandKind::UpdateAttribute(expr1, attribute, expr2) => {
-                let (arg1, arg2): (Value, Value) =
-                    match (self.clone().dummy_interpret::<()>(expr1), self.clone().dummy_interpret::<()>(expr2)) {
-                        (Ok(value1), Ok(value2)) => match value1.value_kind() {
-                            ValueKind::Lit(Literal::EntityUID(uid)) => {
-                                //todo!("Update attribute for entity: {:?}", uid);
-                                self.entity_store.update_attribute(uid, &attribute, value2.clone())?;
-                                (value1, value2)
-                            },
-                            _ => todo!(
-                                "Error when first argument of updateAttribute is not an EntityUID"
-                            ),
-                        },
-                        (_, _) => todo!("Error when arguments of updateAttribute are not corret"),
-                    };
+                let (arg1, arg2): (Value, Value) = match (
+                    self.clone().dummy_interpret::<()>(expr1),
+                    self.clone().dummy_interpret::<()>(expr2),
+                ) {
+                    (Ok(value1), Ok(value2)) => match value1.value_kind() {
+                        ValueKind::Lit(Literal::EntityUID(uid)) => {
+                            //todo!("Update attribute for entity: {:?}", uid);
+                            self.entity_store
+                                .update_attribute(uid, &attribute, value2.clone())?;
+                            (value1, value2)
+                        }
+                        _ => todo!(
+                            "Error when first argument of updateAttribute is not an EntityUID"
+                        ),
+                    },
+                    (_, _) => todo!("Error when arguments of updateAttribute are not corret"),
+                };
                 Ok(())
             }
+            CommandKind::Sequence(c1, c2) => {
+                self.execute::<()>(c1.as_ref().clone())?;
+                self.execute::<()>(c2.as_ref().clone())?;
+                Ok(())
+            },
         }
     }
 
