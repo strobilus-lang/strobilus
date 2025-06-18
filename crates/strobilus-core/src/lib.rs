@@ -1,5 +1,5 @@
 pub mod entity_store;
-pub mod executor;
+pub mod interpreter;
 pub mod parser;
 pub mod ast;
 
