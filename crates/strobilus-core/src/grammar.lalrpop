@@ -45,10 +45,6 @@ match {
     "if" => IF,
 
     // Common Identifiers
-    "permit" => PERMIT,
-    "forbid" => FORBID,
-    "when" => WHEN,
-    "unless" => UNLESS,
     "in" => IN,
     "has" => HAS,
     "like" => LIKE,
@@ -61,11 +57,6 @@ match {
     "action" => ACTION,
     "resource" => RESOURCE,
     "context" => CONTEXT,
-
-    // Valid slots, hardcoded for now, may be generalized later
-    "?principal" => PRINCIPAL_SLOT,
-    "?resource" => RESOURCE_SLOT,
-    r"\?[_a-zA-Z][_a-zA-Z0-9]*" => OTHER_SLOT,
 
     // data input
     r"[_a-zA-Z][_a-zA-Z0-9]*" => IDENTIFIER,
@@ -104,7 +95,7 @@ pub Command: Node<Option<CstCommand>> = {
     => bc,
     // TODO: error
     <l:@L>
-    <c1: Command> ";" <c2: Command>
+    <c1: BasicCommand> ";" <c2: Command>
     <r:@R>
     => Node::with_source_loc(Some(CstCommand::Sequence(Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
 }
@@ -115,11 +106,6 @@ Comma<E>: Vec<E> = {
         es.push(e);
         es
     },
-}
-
-// Annotations := {'@' Ident '(' String ')'}
-Annotation: Node<Option<cst::Annotation>> = {
-    <l:@L> "@" <key:AnyIdent> <value: ("(" <Str> ")")?> <r:@R> => Node::with_source_loc(Some(cst::Annotation{key,value}), Loc::new(l..r, Arc::clone(src)))
 }
 
 // VariableDef := Variable [':' Name] ['is' Add] [('in' | '==') Expr]
@@ -142,14 +128,6 @@ CommonIdent: Node<Option<cst::Ident>> = {
         => Node::with_source_loc(Some(cst::Ident::Resource), Loc::new(l..r, Arc::clone(src))),
     <l:@L> CONTEXT <r:@R>
         => Node::with_source_loc(Some(cst::Ident::Context), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> PERMIT <r:@R>
-        => Node::with_source_loc(Some(cst::Ident::Permit), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> FORBID <r:@R>
-        => Node::with_source_loc(Some(cst::Ident::Forbid), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> WHEN <r:@R>
-        => Node::with_source_loc(Some(cst::Ident::When), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> UNLESS <r:@R>
-        => Node::with_source_loc(Some(cst::Ident::Unless), Loc::new(l..r, Arc::clone(src))),
     <l:@L> IN <r:@R>
         => Node::with_source_loc(Some(cst::Ident::In), Loc::new(l..r, Arc::clone(src))),
     <l:@L> HAS <r:@R>
@@ -184,16 +162,6 @@ pub Ident: Node<Option<cst::Ident>> = AnyIdent;
 IfIdent: Node<Option<cst::Ident>> = {
     <l:@L> IF <r:@R>
         => Node::with_source_loc(Some(cst::Ident::If), Loc::new(l..r, Arc::clone(src))),
-}
-
-// Cond := ('when' | 'unless') '{' Expr '}'
-Cond: Node<Option<cst::Cond>> = {
-    <l:@L> <i:AnyIdent> "{" <e:Expr> "}" <r:@R>
-        => Node::with_source_loc(Some(cst::Cond{cond: i, expr: Some(e)}), Loc::new(l..r, Arc::clone(src))),
-    // specifically catch the error case for empty-body, so we can report a good
-    // error message
-    <l:@L> <i:AnyIdent> "{" "}" <r:@R>
-        => Node::with_source_loc(Some(cst::Cond{cond: i, expr: None}), Loc::new(l..r, Arc::clone(src))),
 }
 
 // Expr := Or | 'if' Expr 'then' Expr 'else' Expr
@@ -325,8 +293,6 @@ pub Primary: Node<Option<cst::Primary>> = {
         => Node::with_source_loc(Some(cst::Primary::Ref(refr)), Loc::new(l..r, Arc::clone(src))),
     <l:@L> <n:Name> <r:@R>
         => Node::with_source_loc(Some(cst::Primary::Name(n)), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> <s:Slot> <r:@R>
-        => Node::with_source_loc(Some(cst::Primary::Slot(s)), Loc::new(l..r, Arc::clone(src))),
     <l:@L> "(" <e:Expr> ")" <r:@R>
         => Node::with_source_loc(Some(cst::Primary::Expr(e)), Loc::new(l..r, Arc::clone(src))),
     <l:@L> "[" <es:Comma<Expr>> "]" <r:@R>
@@ -380,15 +346,6 @@ RecInit: Node<Option<cst::RecInit>> = {
         },
     <l:@L> <e1:Expr> ":" <e2:Expr> <r:@R>
         => Node::with_source_loc(Some(cst::RecInit(e1,e2)), Loc::new(l..r, Arc::clone(src))),
-}
-
-Slot: Node<Option<cst::Slot>> = {
-    <l:@L> PRINCIPAL_SLOT <r:@R>
-        => Node::with_source_loc(Some(cst::Slot::Principal), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> RESOURCE_SLOT <r:@R>
-        => Node::with_source_loc(Some(cst::Slot::Resource), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> <s: OTHER_SLOT> <r:@R>
-        => Node::with_source_loc(Some(cst::Slot::Other(s.into())), Loc::new(l..r, Arc::clone(src))),
 }
 
 // LITERAL   := BOOL | INT | STR

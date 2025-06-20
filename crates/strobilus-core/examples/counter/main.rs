@@ -36,6 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let program = r#"
         updateAttribute(principal, "counter", principal.counter - 1);
+        updateAttribute(principal, "counter", principal.counter - 1);
         updateAttribute(principal, "counter", principal.counter - 1)
     "#;
 
