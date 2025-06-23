@@ -4,6 +4,7 @@ use cedar_policy_core::ast::Expr;
 pub enum CommandKind<T = ()> {
     UpdateAttribute(Expr<T>, String, Expr<T>),
     Sequence(Box<Command<T>>, Box<Command<T>>),
+    IfThenElse(Expr<T>, Box<Command<T>>, Box<Command<T>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,28 +18,8 @@ impl<T> Command<T> {
     }
 }
 
-/* /// Dummy function for generate updateAttribute command (already exisiting attribute)
-pub fn update_attribute_command_1() -> Command<()> {
-    let principal = Expr::var(Var::Principal);
-
-    Command {
-        kind: CommandKind::UpdateAttribute(
-            principal.clone(),
-            "counter".into(),
-            Expr::sub(Expr::get_attr(principal, "counter".into()), Expr::val(1)),
-        ),
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandSet<T = ()> {
+    pub on_allow: Box<Command<T>>,
+    pub on_deny: Box<Command<T>>,
 }
-
-/// Dummy function for generate updateAttribute command (already exisiting attribute)
-pub fn update_attribute_command_2() -> Command<()> {
-    let principal = Expr::var(Var::Principal);
-
-    Command {
-        kind: CommandKind::UpdateAttribute(
-            principal.clone(),
-            "role".into(),
-            Expr::val("research fellow"),
-        ),
-    }
-} */

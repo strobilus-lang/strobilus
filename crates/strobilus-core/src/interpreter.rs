@@ -1,39 +1,56 @@
 use cedar_policy_core::{
     ast::{Expr, Literal, Request, SlotEnv, Value, ValueKind},
+    authorizer::Decision,
     evaluator::Evaluator,
     extensions::Extensions,
 };
 
 use crate::{
-    ast::{command::CommandKind, Command},
+    ast::{command::CommandKind, Command, CommandSet},
     entity_store::EntityStore,
 };
 
 #[derive(Debug, Clone)]
 pub struct Interpreter {
     entity_store: EntityStore,
+    commands: CommandSet,
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
+    pub fn new(commands: CommandSet) -> Self {
         Self {
             entity_store: EntityStore::new(),
+            commands,
         }
     }
 
-    pub fn with_entity_store(entities: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn with_entity_store(
+        commands: CommandSet,
+        entities: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let entity_store = EntityStore::from_entities(entities)?;
-        Ok(Self { entity_store })
+        Ok(Self {
+            entity_store,
+            commands,
+        })
     }
 
     pub fn entity_store(&self) -> EntityStore {
         self.entity_store.clone()
     }
 
-    pub fn execute<T>(
+    pub fn execute<T>(&mut self, request: Request, decision: Decision) -> Result<(), Box<dyn std::error::Error>>  {
+        let command = match decision {
+            Decision::Allow => *self.commands.on_allow.clone(),
+            Decision::Deny => *self.commands.on_deny.clone(),
+        };
+        self.recursive_execute::<T>(request, command)
+    }
+
+    fn recursive_execute<T>(
         &mut self,
         request: Request,
-        command: Command<()>,
+        command: Command,
     ) -> Result<(), Box<dyn std::error::Error>> {
         match command.inner_kind() {
             CommandKind::UpdateAttribute(expr1, attribute, expr2) => {
@@ -57,8 +74,26 @@ impl Interpreter {
                 Ok(())
             }
             CommandKind::Sequence(c1, c2) => {
-                self.execute::<()>(request.clone(), c1.as_ref().clone())?;
-                self.execute::<()>(request.clone(), c2.as_ref().clone())?;
+                self.recursive_execute::<()>(request.clone(), c1.as_ref().clone())?;
+                self.recursive_execute::<()>(request.clone(), c2.as_ref().clone())?;
+                Ok(())
+            }
+            CommandKind::IfThenElse(condition, c1, c2) => {
+                let condition_value = self.clone().evaluate::<()>(request.clone(), condition)?;
+                match condition_value.value_kind() {
+                    ValueKind::Lit(Literal::Bool(true)) => {
+                        self.recursive_execute::<()>(request.clone(), c1.as_ref().clone())?;
+                    }
+                    ValueKind::Lit(Literal::Bool(false)) => {
+                        self.recursive_execute::<()>(request.clone(), c2.as_ref().clone())?;
+                    }
+                    _ => {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "Condition must evaluate to a boolean",
+                        )));
+                    }
+                }
                 Ok(())
             }
         }
