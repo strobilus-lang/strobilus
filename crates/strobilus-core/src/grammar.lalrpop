@@ -21,7 +21,7 @@ use lalrpop_util::{ParseError, ErrorRecovery};
 
 use cedar_policy_core::parser::*;
 use cedar_policy_core::parser::Node;
-use crate::parser::cst::Command as CstCommand;
+use crate::parser::cst::{Command as CstCommand, CommandSet as CstCommandSet};
 use crate::parser::err::{RawErrorRecovery, RawUserError};
 
 
@@ -77,6 +77,10 @@ match {
 
     // Basic command operators
     "updateAttribute" => UPDATEATTRIBUTE,
+
+    // Strobilus programm
+    "on allow" => ON_ALLOW,
+    "on deny" => ON_DENY,
 }
 
 BasicCommand: Node<Option<CstCommand>> = {
@@ -89,15 +93,18 @@ BasicCommand: Node<Option<CstCommand>> = {
 
 // Commands
 pub Command: Node<Option<CstCommand>> = {
-    <l:@L>
-    <bc: BasicCommand>
-    <r:@R>
-    => bc,
-    // TODO: error
-    <l:@L>
-    <c1: BasicCommand> ";" <c2: Command>
-    <r:@R>
-    => Node::with_source_loc(Some(CstCommand::Sequence(Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
+    <l:@L> <bc: BasicCommand> <r:@R> => bc,
+    <l:@L> "{" <c: Command> "}" <r:@R> => c,
+    <l:@L> <c1: BasicCommand> ";" <c2: Command> <r:@R>
+        => Node::with_source_loc(Some(CstCommand::Sequence(Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
+    <l:@L> IF <condition:Expr> THEN <c1:Command> ELSE <c2:Command> <r:@R>
+        => Node::with_source_loc(Some(CstCommand::IfThenElse(condition, Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
+}
+
+// Set of Command ==> Strobilus program
+pub CommandSet: Node<Option<CstCommandSet>> = {
+    <l:@L> ON_ALLOW "{" <c1: Command> "}" ON_DENY "{" <c2: Command> "}" <r:@R>
+        => Node::with_source_loc(Some(CstCommandSet{ on_allow: Box::new(c1), on_deny: Box::new(c2) }), Loc::new(l..r, Arc::clone(src))),
 }
 
 Comma<E>: Vec<E> = {
