@@ -1,6 +1,10 @@
+use cedar_policy_core::{ast::{EntityUID, EntityUIDEntry, Request}, authorizer::Decision};
 use std::{str::FromStr, sync::Arc};
-use cedar_policy_core::ast::{EntityUID, EntityUIDEntry, Request};
-use strobilus_core::{ast::lower_command, interpreter, parser::parse_command};
+use strobilus_core::{
+    ast::lower_command_set,
+    interpreter,
+    parser::parse_command_set,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data = r#"
@@ -35,29 +39,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let program = r#"
-        updateAttribute(principal, "counter", principal.counter - 1);
-        updateAttribute(principal, "counter", principal.counter - 1);
-        updateAttribute(principal, "counter", principal.counter - 1)
+    on allow {
+        if (principal.counter > 0) then {
+            updateAttribute(principal, "counter", principal.counter - 1)
+        } else {
+            updateAttribute(principal, "counter", 0)
+        }
+    }
+    on deny { updateAttribute(principal, "counter", 0) }
     "#;
 
-    let mut executor = interpreter::Interpreter::with_entity_store(data)?;
+    let cst = parse_command_set(program)?;
+
+    let ast = lower_command_set(cst)?;
+
+    let mut interpreter = interpreter::Interpreter::with_entity_store(ast, data)?;
 
     println!(
         "--- Entity store BEFORE: {:?}",
-        executor.clone().entity_store()
+        interpreter.clone().entity_store()
     );
 
-    //let command = executor::commands::update_attribute_command_1();
-    let cst_command = parse_command(program)?;
+    interpreter.execute::<()>(request, Decision::Allow)?;
 
-    let command = lower_command(cst_command)?;
-
-    println!("-- Command {:?}", command);
-
-    let _ = &executor.execute::<()>(request, command)?;
-
-    let es = &executor.entity_store();
-    println!("--- Entity store AFTER: {:?}", es);
+    println!(
+        "--- Entity store AFTER: {:?}",
+        interpreter.clone().entity_store()
+    );
 
     Ok(())
 }
