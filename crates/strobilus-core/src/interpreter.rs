@@ -54,24 +54,18 @@ impl Interpreter {
     ) -> Result<(), Box<dyn std::error::Error>> {
         match command.inner_kind() {
             CommandKind::UpdateAttribute(expr1, attribute, expr2) => {
-                let (arg1, arg2): (Value, Value) = match (
-                    self.clone().evaluate::<()>(request.clone(), expr1),
-                    self.clone().evaluate::<()>(request.clone(), expr2),
-                ) {
-                    (Ok(value1), Ok(value2)) => match value1.value_kind() {
-                        ValueKind::Lit(Literal::EntityUID(uid)) => {
-                            //todo!("Update attribute for entity: {:?}", uid);
-                            self.entity_store
-                                .update_attribute(uid, &attribute, value2.clone())?;
-                            (value1, value2)
-                        }
-                        _ => todo!(
-                            "Error when first argument of updateAttribute is not an EntityUID"
-                        ),
-                    },
-                    (_, _) => todo!("Error when arguments of updateAttribute are not corret"),
-                };
-                Ok(())
+                let value1 = self.clone().evaluate::<()>(request.clone(), expr1)?;
+                let value2 = self.clone().evaluate::<()>(request.clone(), expr2)?;
+
+                if let ValueKind::Lit(Literal::EntityUID(uid)) = value1.value_kind() {
+                    self.entity_store.update_attribute(uid, &attribute, value2.clone())?;
+                    Ok(())
+                } else {
+                    Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "First argument of updateAttribute must be an EntityUID",
+                    )))
+                }
             }
             CommandKind::Sequence(c1, c2) => {
                 self.recursive_execute::<()>(request.clone(), c1.as_ref().clone())?;
