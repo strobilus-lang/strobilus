@@ -9,6 +9,7 @@ pub enum Command {
     UpdateAttribute(Node<Expr>, Node<Str>, Node<Expr>),
     Sequence(Box<Node<Command>>, Box<Node<Command>>),
     IfThenElse(Node<Expr>, Box<Node<Command>>, Box<Node<Command>>),
+    Skip,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

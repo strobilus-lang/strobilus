@@ -91,20 +91,35 @@ BasicCommand: Node<Option<CstCommand>> = {
     => Node::with_source_loc(Some(CstCommand::UpdateAttribute(e1, s, e2)), Loc::new(l..r, Arc::clone(src))),
 }
 
+SimpleCommand: Node<Option<CstCommand>> = {
+    <l:@L> <bc: BasicCommand> ";" <r:@R> => bc,
+    <l:@L> IF <condition:Expr> THEN "{" <c1:Command> "}" ELSE "{" <c2:Command> "}" <r:@R>
+        => Node::with_source_loc(Some(CstCommand::IfThenElse(condition, Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
+    <l:@L> IF <condition:Expr> THEN "{" <c1:Command> "}" <r:@R> => {
+            let skip = Node::with_source_loc(Some(CstCommand::Skip), Loc::new(l..r, Arc::clone(src)));
+            Node::with_source_loc(Some(CstCommand::IfThenElse(condition, Box::new(c1), Box::new(skip))), Loc::new(l..r, Arc::clone(src)))
+    },
+}
+
 // Commands
 pub Command: Node<Option<CstCommand>> = {
-    <l:@L> <bc: BasicCommand> <r:@R> => bc,
-    <l:@L> "{" <c: Command> "}" <r:@R> => c,
-    <l:@L> <c1: BasicCommand> ";" <c2: Command> <r:@R>
+    <l:@L> <c: SimpleCommand> <r:@R> => c,
+    <l:@L> <c1: SimpleCommand> <c2: Command> <r:@R>
         => Node::with_source_loc(Some(CstCommand::Sequence(Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
-    <l:@L> IF <condition:Expr> THEN <c1:Command> ELSE <c2:Command> <r:@R>
-        => Node::with_source_loc(Some(CstCommand::IfThenElse(condition, Box::new(c1), Box::new(c2))), Loc::new(l..r, Arc::clone(src))),
 }
 
 // Set of Command ==> Strobilus program
 pub CommandSet: Node<Option<CstCommandSet>> = {
     <l:@L> ON_ALLOW "{" <c1: Command> "}" ON_DENY "{" <c2: Command> "}" <r:@R>
         => Node::with_source_loc(Some(CstCommandSet{ on_allow: Box::new(c1), on_deny: Box::new(c2) }), Loc::new(l..r, Arc::clone(src))),
+    <l:@L> ON_ALLOW "{" <c: Command> "}" <r:@R> => {
+            let skip = Node::with_source_loc(Some(CstCommand::Skip), Loc::new(l..r, Arc::clone(src)));
+            Node::with_source_loc(Some(CstCommandSet{ on_allow: Box::new(c), on_deny: Box::new(skip) }), Loc::new(l..r, Arc::clone(src)))
+    },
+    <l:@L> ON_DENY "{" <c: Command> "}" <r:@R> => {
+            let skip = Node::with_source_loc(Some(CstCommand::Skip), Loc::new(l..r, Arc::clone(src)));
+            Node::with_source_loc(Some(CstCommandSet{ on_allow: Box::new(skip), on_deny: Box::new(c) }), Loc::new(l..r, Arc::clone(src)))
+    },
 }
 
 Comma<E>: Vec<E> = {

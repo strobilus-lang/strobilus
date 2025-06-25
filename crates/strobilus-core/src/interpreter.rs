@@ -39,7 +39,11 @@ impl Interpreter {
         self.entity_store.clone()
     }
 
-    pub fn execute<T>(&mut self, request: Request, decision: Decision) -> Result<(), Box<dyn std::error::Error>>  {
+    pub fn execute<T>(
+        &mut self,
+        request: Request,
+        decision: Decision,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let command = match decision {
             Decision::Allow => *self.commands.on_allow.clone(),
             Decision::Deny => *self.commands.on_deny.clone(),
@@ -58,7 +62,8 @@ impl Interpreter {
                 let value2 = self.clone().evaluate::<()>(request.clone(), expr2)?;
 
                 if let ValueKind::Lit(Literal::EntityUID(uid)) = value1.value_kind() {
-                    self.entity_store.update_attribute(uid, &attribute, value2.clone())?;
+                    self.entity_store
+                        .update_attribute(uid, &attribute, value2.clone())?;
                     Ok(())
                 } else {
                     Err(Box::new(std::io::Error::new(
@@ -90,6 +95,7 @@ impl Interpreter {
                 }
                 Ok(())
             }
+            CommandKind::Skip => Ok(()),
         }
     }
 

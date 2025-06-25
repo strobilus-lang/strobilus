@@ -5,6 +5,7 @@ pub enum CommandKind<T = ()> {
     UpdateAttribute(Expr<T>, String, Expr<T>),
     Sequence(Box<Command<T>>, Box<Command<T>>),
     IfThenElse(Expr<T>, Box<Command<T>>, Box<Command<T>>),
+    Skip,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
