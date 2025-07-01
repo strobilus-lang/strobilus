@@ -6,6 +6,22 @@ use crate::{
 fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn std::error::Error>> {
     // TODO: handle better errors
     match command.node.expect("Error parsing command") {
+        CstCommand::AddParent(expr1, expr2) => {
+            Ok(AstCommand {
+                kind: CommandKind::AddParent(
+                    expr1.to_expr()?,
+                    expr2.to_expr()?,
+                ),
+            })
+        },
+        CstCommand::RemoveParent(expr1, expr2) => {
+            Ok(AstCommand {
+                kind: CommandKind::RemoveParent(
+                    expr1.to_expr()?,
+                    expr2.to_expr()?,
+                ),
+            })
+        },
         CstCommand::UpdateAttribute(expr1, attr, expr2) => {
             Ok(AstCommand {
                 kind: CommandKind::UpdateAttribute(
@@ -21,6 +37,18 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
                 ),
             })
         }
+        CstCommand::RemoveAttribute(expr1, attr) => {
+            Ok(AstCommand {
+                kind: CommandKind::RemoveAttribute(
+                    expr1.to_expr()?,
+                    // Uguale a sopra
+                    {
+                        let _attr = attr.node.expect("Attribute string missing").to_string();
+                        _attr[1.._attr.len() - 1].to_owned()
+                    },
+                ),
+            })
+        },
         CstCommand::Sequence(c1, c2) => Ok(AstCommand {
             kind: CommandKind::Sequence(
                 Box::new(lower_command(*c1)?),

@@ -2,7 +2,10 @@ use cedar_policy_core::ast::Expr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandKind<T = ()> {
+    AddParent(Expr<T>, Expr<T>),
+    RemoveParent(Expr<T>, Expr<T>),
     UpdateAttribute(Expr<T>, String, Expr<T>),
+    RemoveAttribute(Expr<T>, String),
     Sequence(Box<Command<T>>, Box<Command<T>>),
     IfThenElse(Expr<T>, Box<Command<T>>, Box<Command<T>>),
     Skip,

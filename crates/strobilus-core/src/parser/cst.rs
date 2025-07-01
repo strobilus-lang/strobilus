@@ -6,7 +6,13 @@ pub(crate) type Node<N> = CedarNode<Option<N>>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     // Ancora non è chiaro cosa usare per gli attributi
+    AddParent(Node<Expr>, Node<Expr>),
+    RemoveParent(Node<Expr>, Node<Expr>),
+    //UpdateEntity(Node<Expr>, Node<Expr>, Node<Expr>, Node<Expr>),
+    //RemoveEntity(Node<Expr>),
     UpdateAttribute(Node<Expr>, Node<Str>, Node<Expr>),
+    RemoveAttribute(Node<Expr>, Node<Str>),
+
     Sequence(Box<Node<Command>>, Box<Node<Command>>),
     IfThenElse(Node<Expr>, Box<Node<Command>>, Box<Node<Command>>),
     Skip,

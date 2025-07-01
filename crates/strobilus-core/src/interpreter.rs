@@ -57,6 +57,46 @@ impl Interpreter {
         command: Command,
     ) -> Result<(), Box<dyn std::error::Error>> {
         match command.inner_kind() {
+            CommandKind::AddParent(expr, expr1) => {
+                let child_value = self.clone().evaluate::<()>(request.clone(), expr)?;
+                let parent_value = self.clone().evaluate::<()>(request.clone(), expr1)?;
+
+                match (child_value.value_kind(), parent_value.value_kind()) {
+                    (ValueKind::Lit(Literal::EntityUID(child_uid)), ValueKind::Lit(Literal::EntityUID(parent_uid))) => {
+                        self.entity_store
+                            .add_parent(child_uid, (**parent_uid).clone())?;
+                        Ok(())
+                    }
+                    (ValueKind::Lit(Literal::EntityUID(_)), _) => Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Second argument of addParent must be an EntityUID",
+                    ))),
+                    _ => Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "First argument of addParent must be an EntityUID",
+                    ))),
+                }
+            },
+            CommandKind::RemoveParent(expr, expr1) => {
+                let child_value = self.clone().evaluate::<()>(request.clone(), expr)?;
+                let parent_value = self.clone().evaluate::<()>(request.clone(), expr1)?;
+
+                match (child_value.value_kind(), parent_value.value_kind()) {
+                    (ValueKind::Lit(Literal::EntityUID(child_uid)), ValueKind::Lit(Literal::EntityUID(parent_uid))) => {
+                        self.entity_store
+                            .remove_parent(child_uid, parent_uid)?;
+                        Ok(())
+                    }
+                    (ValueKind::Lit(Literal::EntityUID(_)), _) => Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Second argument of removeParent must be an EntityUID",
+                    ))),
+                    _ => Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "First argument of removeParent must be an EntityUID",
+                    ))),
+                }
+            },
             CommandKind::UpdateAttribute(expr1, attribute, expr2) => {
                 let value1 = self.clone().evaluate::<()>(request.clone(), expr1)?;
                 let value2 = self.clone().evaluate::<()>(request.clone(), expr2)?;
@@ -72,6 +112,20 @@ impl Interpreter {
                     )))
                 }
             }
+            CommandKind::RemoveAttribute(expr, attribute) => {
+                let value = self.clone().evaluate::<()>(request.clone(), expr)?;
+
+                if let ValueKind::Lit(Literal::EntityUID(uid)) = value.value_kind() {
+                    self.entity_store
+                        .remove_attribute(uid, attribute)?;
+                    Ok(())
+                } else {
+                    Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Argument of removeAttribute must be an EntityUID",
+                    )))
+                }
+            },
             CommandKind::Sequence(c1, c2) => {
                 self.recursive_execute::<()>(request.clone(), c1.as_ref().clone())?;
                 self.recursive_execute::<()>(request.clone(), c2.as_ref().clone())?;

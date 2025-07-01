@@ -76,7 +76,10 @@ match {
     "=",
 
     // Basic command operators
+    "addParent" => ADDPARENT,
+    "removeParent" => REMOVEPARENT,
     "updateAttribute" => UPDATEATTRIBUTE,
+    "removeAttribute" => REMOVEATTRIBUTE,
 
     // Strobilus programm
     "on allow" => ON_ALLOW,
@@ -85,10 +88,25 @@ match {
 
 BasicCommand: Node<Option<CstCommand>> = {
     <l:@L>
+    ADDPARENT
+    "(" <e1: Expr> "," <e2: Expr> ")"
+    <r:@R>
+    => Node::with_source_loc(Some(CstCommand::AddParent(e1, e2)), Loc::new(l..r, Arc::clone(src))),
+        <l:@L>
+    REMOVEPARENT
+    "(" <e1: Expr> "," <e2: Expr> ")"
+    <r:@R>
+    => Node::with_source_loc(Some(CstCommand::RemoveParent(e1, e2)), Loc::new(l..r, Arc::clone(src))),
+    <l:@L>
     UPDATEATTRIBUTE
     "(" <e1: Expr> "," <s: Str> "," <e2: Expr> ")"
     <r:@R>
     => Node::with_source_loc(Some(CstCommand::UpdateAttribute(e1, s, e2)), Loc::new(l..r, Arc::clone(src))),
+    <l:@L>
+    REMOVEATTRIBUTE
+    "(" <e: Expr> "," <s: Str> ")"
+    <r:@R>
+    => Node::with_source_loc(Some(CstCommand::RemoveAttribute(e, s)), Loc::new(l..r, Arc::clone(src))),
 }
 
 SimpleCommand: Node<Option<CstCommand>> = {
