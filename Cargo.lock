@@ -839,7 +839,7 @@ dependencies = [
  "cedar-policy-core",
  "lalrpop",
  "lalrpop-util",
- "regex",
+ "smol_str",
  "thiserror 2.0.12",
 ]
 

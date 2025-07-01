@@ -9,5 +9,5 @@ lalrpop = "0.22.2"
 [dependencies]
 cedar-policy-core = { workspace = true }
 lalrpop-util = "0.22.2"
-regex = "1.11.1"
+smol_str = "0.3.2"
 thiserror = "2.0.12"
