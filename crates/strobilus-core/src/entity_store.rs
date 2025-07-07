@@ -61,39 +61,39 @@ impl EntityStore {
         ancestors: HashSet<EntityUID>,
         tags: HashMap<SmolStr, PartialValue>
     ) -> Result<(), EntityStoreError> {
-        if self.entities.contains_key(&uid) {
-            println!("--- Updating entity: {:?}", uid);
-            // Convert Value to RestrictedExpr for each attribute
-            let attrs_restricted: HashMap<SmolStr, cedar_policy_core::ast::RestrictedExpr> = attrs
-                .into_iter()
-                .map(|(k, v)| {
-                    let expr = cedar_policy_core::ast::RestrictedExpr::from(v);
-                    (k, expr)
-                })
-                .collect();
-            // Convert PartialValue to RestrictedExpr for each tag, propagating errors
-            let tags_restricted: Result<HashMap<SmolStr, cedar_policy_core::ast::RestrictedExpr>, _> = tags
-                .into_iter()
-                .map(|(k, v)| {
-                    cedar_policy_core::ast::RestrictedExpr::try_from(v).map(|expr| (k, expr))
-                })
-                .collect();
-            let tags_restricted = tags_restricted
-                .map_err(|e| EntityStoreError::Invalid(format!("Tag conversion failed: {}", e)))?;
-            self.entities.insert(
-                uid.clone(),
-                Entity::new(
-                    uid.clone(),
-                    attrs_restricted,
-                    ancestors,
-                    tags_restricted,
-                    Extensions::none(),
-                ).map_err(|e| EntityStoreError::Invalid(format!("Entity creation failed: {}", e)))?,
-            );
-            Ok(())
-        } else {
-            Err(EntityStoreError::NotFound(uid))
-        }
+        // Convert Value to RestrictedExpr for each attribute
+        let attrs_restricted: HashMap<SmolStr, cedar_policy_core::ast::RestrictedExpr> = attrs
+            .into_iter()
+            .map(|(k, v)| {
+            let expr = cedar_policy_core::ast::RestrictedExpr::from(v);
+            (k, expr)
+            })
+            .collect();
+        // Convert PartialValue to RestrictedExpr for each tag, propagating errors
+        let tags_restricted: Result<HashMap<SmolStr, cedar_policy_core::ast::RestrictedExpr>, _> = tags
+            .into_iter()
+            .map(|(k, v)| {
+            cedar_policy_core::ast::RestrictedExpr::try_from(v).map(|expr| (k, expr))
+            })
+            .collect();
+        let tags_restricted = tags_restricted
+            .map_err(|e| EntityStoreError::Invalid(format!("Tag conversion failed: {}", e)))?;
+        println!(
+            "--- {} entity: {:?}",
+            if self.entities.contains_key(&uid) { "Updating" } else { "Creating" },
+            uid
+        );
+        self.entities.insert(
+            uid.clone(),
+            Entity::new(
+            uid.clone(),
+            attrs_restricted,
+            ancestors,
+            tags_restricted,
+            Extensions::none(),
+            ).map_err(|e| EntityStoreError::Invalid(format!("Entity creation failed: {}", e)))?,
+        );
+        Ok(())
     }
 
     pub fn remove_entity(&mut self, uid: &EntityUID) -> Result<(), EntityStoreError> {
