@@ -6,20 +6,25 @@ use crate::{
 fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn std::error::Error>> {
     // TODO: handle better errors
     match command.node.expect("Error parsing command") {
-        CstCommand::AddParent(expr1, expr2) => {
+        CstCommand::AddParent(expr1, expr2) => Ok(AstCommand {
+            kind: CommandKind::AddParent(expr1.to_expr()?, expr2.to_expr()?),
+        }),
+        CstCommand::RemoveParent(expr1, expr2) => Ok(AstCommand {
+            kind: CommandKind::RemoveParent(expr1.to_expr()?, expr2.to_expr()?),
+        }),
+        CstCommand::UpdateEntity(uid, attributes, ancestors, tags) => {
             Ok(AstCommand {
-                kind: CommandKind::AddParent(
-                    expr1.to_expr()?,
-                    expr2.to_expr()?,
+                kind: CommandKind::UpdateEntity(
+                    uid.to_expr()?,
+                    attributes.to_expr()?,
+                    ancestors.to_expr()?,
+                    tags.to_expr()?,
                 ),
             })
         },
-        CstCommand::RemoveParent(expr1, expr2) => {
+        CstCommand::RemoveEntity(uid) => {
             Ok(AstCommand {
-                kind: CommandKind::RemoveParent(
-                    expr1.to_expr()?,
-                    expr2.to_expr()?,
-                ),
+                kind: CommandKind::RemoveEntity(uid.to_expr()?),
             })
         },
         CstCommand::UpdateAttribute(expr1, attr, expr2) => {
@@ -48,7 +53,7 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
                     },
                 ),
             })
-        },
+        }
         CstCommand::Sequence(c1, c2) => Ok(AstCommand {
             kind: CommandKind::Sequence(
                 Box::new(lower_command(*c1)?),

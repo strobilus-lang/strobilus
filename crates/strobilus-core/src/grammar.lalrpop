@@ -78,6 +78,8 @@ match {
     // Basic command operators
     "addParent" => ADDPARENT,
     "removeParent" => REMOVEPARENT,
+    "updateEntity" => UPDATEENTITY,
+    "removeEntity" => REMOVEENTITY,
     "updateAttribute" => UPDATEATTRIBUTE,
     "removeAttribute" => REMOVEATTRIBUTE,
 
@@ -87,21 +89,37 @@ match {
 }
 
 BasicCommand: Node<Option<CstCommand>> = {
+    // addParent
     <l:@L>
     ADDPARENT
     "(" <e1: Expr> "," <e2: Expr> ")"
     <r:@R>
     => Node::with_source_loc(Some(CstCommand::AddParent(e1, e2)), Loc::new(l..r, Arc::clone(src))),
-        <l:@L>
+    // removeParent
+    <l:@L>
     REMOVEPARENT
     "(" <e1: Expr> "," <e2: Expr> ")"
     <r:@R>
     => Node::with_source_loc(Some(CstCommand::RemoveParent(e1, e2)), Loc::new(l..r, Arc::clone(src))),
+    // updateEntity
+    <l:@L>
+    UPDATEENTITY
+    "(" <e1: Expr> "," <e2: Expr> "," <e3: Expr> "," <e4: Expr>")"
+    <r:@R>
+    => Node::with_source_loc(Some(CstCommand::UpdateEntity(e1, e2, e3, e4)), Loc::new(l..r, Arc::clone(src))),
+    // removeEntity
+    <l:@L>
+    REMOVEENTITY
+    "(" <e1: Expr> ")"
+    <r:@R>
+    => Node::with_source_loc(Some(CstCommand::RemoveEntity(e1)), Loc::new(l..r, Arc::clone(src))),
+    // updateAttribute
     <l:@L>
     UPDATEATTRIBUTE
     "(" <e1: Expr> "," <s: Str> "," <e2: Expr> ")"
     <r:@R>
     => Node::with_source_loc(Some(CstCommand::UpdateAttribute(e1, s, e2)), Loc::new(l..r, Arc::clone(src))),
+    // removeAttribute
     <l:@L>
     REMOVEATTRIBUTE
     "(" <e: Expr> "," <s: Str> ")"
