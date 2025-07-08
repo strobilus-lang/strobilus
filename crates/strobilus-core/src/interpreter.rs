@@ -1,4 +1,5 @@
 use cedar_policy_core::ast::EntityUID;
+use cedar_policy_core::entities::Entities;
 use cedar_policy_core::{
     ast::{Expr, Literal, Request, SlotEnv, Value, ValueKind},
     authorizer::Decision,
@@ -19,22 +20,13 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    pub fn new(commands: CommandSet) -> Self {
+    // TODO: use the Default trait
+    pub fn new(commands: CommandSet, entities: Entities) -> Self {
+        let entity_store = EntityStore::from_entities(entities);
         Self {
-            entity_store: EntityStore::new(),
-            commands,
-        }
-    }
-
-    pub fn with_entity_store(
-        commands: CommandSet,
-        entities: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let entity_store = EntityStore::from_entities(entities)?;
-        Ok(Self {
             entity_store,
             commands,
-        })
+        }
     }
 
     pub fn entity_store(&self) -> EntityStore {
