@@ -1,14 +1,12 @@
+use crate::ast::{lower_command_set, CommandSet};
+
 pub mod entity_store;
 pub mod interpreter;
 pub mod parser;
 pub mod ast;
 
-/* fn read_policy(filename: impl AsRef<Path>) -> Result<PolicySet, Box<dyn std::error::Error>> {
-    let file_content = std::fs::read_to_string(filename)?;
-    PolicySet::from_str(&file_content).map_err(Into::into)
-} */
-
-/* fn read_entities(filename: impl AsRef<Path>) -> Result<Entities, Box<dyn std::error::Error>> {
-    let file = File::open(filename)?;
-    Entities::from_json_file(file, None).map_err(Into::into)
-} */
+pub fn parse_obligations(path: &str) -> Result<CommandSet, Box<dyn std::error::Error + '_>> {
+    let cst = parser::parse_command_set(path)?;
+    let ast = lower_command_set(cst)?;
+    Ok(ast)
+}
