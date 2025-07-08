@@ -29,3 +29,12 @@ pub struct CommandSet<T = ()> {
     pub on_allow: Box<Command<T>>,
     pub on_deny: Box<Command<T>>,
 }
+
+impl<T> CommandSet<T> {
+    pub fn new() -> Self {
+        Self {
+            on_allow: Box::new(Command { kind: CommandKind::Skip }),
+            on_deny: Box::new(Command { kind: CommandKind::Skip }),
+        }
+    }
+}
