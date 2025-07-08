@@ -2,7 +2,7 @@
     {
         "uid": {
             "type": "User",
-            "id": "max"
+            "id": "Max"
         },
         "attrs": {
             "counter": 10

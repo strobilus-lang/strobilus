@@ -1,3 +1,0 @@
-on allow { 
-    updateAttribute(principal, "counter", principal.counter + 1) 
-}

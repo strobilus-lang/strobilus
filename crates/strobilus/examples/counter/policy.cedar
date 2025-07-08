@@ -1,7 +1,7 @@
 permit (
     principal,
-    action == Action::"view",
-    resource == File::"42"
+    action,
+    resource
 )
 when {
     principal.counter > 0
