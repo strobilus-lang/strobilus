@@ -28,7 +28,15 @@ impl EntityStore {
         }
     }
 
-    pub fn from_entities(entities_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_entities(entities: Entities) -> Self {
+        let entities_map = entities
+            .into_iter()
+            .map(|entity| (entity.uid().clone(), entity))
+            .collect();
+        Self { entities: entities_map }
+    }
+
+    pub fn from_entities_str(entities_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let parse_entities =
             EntityJsonParser::<cedar_policy_core::entities::NoEntitiesSchema>::new(
                 None,
