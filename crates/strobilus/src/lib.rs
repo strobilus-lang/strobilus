@@ -1,14 +1,45 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use std::fs;
+
+use cedar_policy_core::{
+    ast::PolicySet,
+    entities::{Entities, EntityJsonParser},
+    extensions::Extensions,
+    parser::parse_policyset,
+};
+use strobilus_core::ast::CommandSet;
+
+pub use strobilus_core::interpreter::Interpreter as Interpreter;
+pub mod authorization;
+mod policy_engine;
+
+pub fn read_policies(path: &str) -> Result<PolicySet, Box<dyn std::error::Error>> {
+    match fs::read_to_string(path) {
+        Ok(text) => parse_policyset(&text)
+            .map_err(|e| format!("Failed to parse policy set from {}: {}", path, e).into()),
+        Err(_) => Ok(PolicySet::new()),
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub fn read_entities(path: &str) -> Result<Entities, Box<dyn std::error::Error>> {
+    match fs::read_to_string(path) {
+        Ok(text) => {
+            let entities = EntityJsonParser::<cedar_policy_core::entities::NoEntitiesSchema>::new(
+                None,
+                Extensions::none(),
+                cedar_policy_core::entities::TCComputation::ComputeNow,
+            )
+            .from_json_str(&text)?;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+            Ok(entities)
+        }
+        Err(_) => Ok(Entities::new()),
+    }
+}
+
+pub fn read_obligations(path: &str) -> Result<CommandSet, Box<dyn std::error::Error>> {
+    match fs::read_to_string(path) {
+        Ok(text) => strobilus_core::parse_obligations(&text)
+            .map_err(|e| format!("Failed to parse obligations from {}: {}", path, e).into()),
+        Err(_) => Ok(CommandSet::new()),
     }
 }
