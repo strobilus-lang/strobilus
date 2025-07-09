@@ -1,14 +1,15 @@
 use std::fs;
 
-use cedar_policy_core::{
-    ast::PolicySet,
-    entities::{Entities, EntityJsonParser},
-    extensions::Extensions,
-    parser::parse_policyset,
-};
-use strobilus_core::ast::CommandSet;
+use cedar_policy_core::{entities::EntityJsonParser, extensions::Extensions};
 
-pub use strobilus_core::interpreter::Interpreter as Interpreter;
+pub use cedar_policy_core::ast::PolicySet;
+pub use cedar_policy_core::ast::Request;
+pub use cedar_policy_core::entities::Entities;
+pub use cedar_policy_core::parser::parse_policyset;
+
+pub use strobilus_core::ast::CommandSet;
+pub use strobilus_core::interpreter::Interpreter;
+
 pub mod authorization;
 mod policy_engine;
 
