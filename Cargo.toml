@@ -8,4 +8,4 @@ members = [
 ]
 
 [workspace.dependencies]
-cedar-policy-core = { version = "4.2.2"} 
+cedar-policy-core = { version = "4.5.0"} 
