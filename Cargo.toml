@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
 
-members = [ "crates/strobilus",
+members = [ 
+    "crates/case_study/scenario_1", 
+    "crates/strobilus",
     "crates/strobilus-core"
 ]
 

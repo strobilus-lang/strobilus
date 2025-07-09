@@ -1,0 +1,12 @@
+[
+    {
+        "uid": {
+            "type": "User",
+            "id": "Max"
+        },
+        "attrs": {
+            "counter": 10
+        },
+        "parents": []
+    }
+]
