@@ -1,0 +1,173 @@
+use std::{
+    collections::{BTreeMap, HashSet},
+    iter,
+    sync::Arc,
+};
+
+use cedar_policy_core::{
+    ast::{Entity, EntityUID, PartialValue, Value},
+    entities::{Entities, NoEntitiesSchema, TCComputation},
+    extensions::Extensions,
+};
+
+use smol_str::SmolStr;
+
+use crate::entities::builder::EntityBuilder;
+
+/// All the operations you can perform *via* an EntityStore,
+/// each taking the `EntityUID` to identify the target.
+/// At this moment, the values of Attributes are represented as `Value`.
+/// In the future, for handle templating, we will switch to PartialValue
+/// as the original Entities provided by Cedar.
+pub trait EntityStore {
+    /// Mutate the direct‐parent set of a given entity.
+    fn add_parent(&mut self, uid: &EntityUID, parent: EntityUID);
+    fn remove_parent(&mut self, uid: &EntityUID, parent: &EntityUID);
+
+    /// Mutate the entity itself.
+    fn update_entity(
+        &mut self,
+        uid: EntityUID,
+        attrs: BTreeMap<SmolStr, PartialValue>,
+        anc: HashSet<EntityUID>,
+        tags: BTreeMap<SmolStr, PartialValue>,
+    );
+    fn remove_entity(&mut self, uid: &EntityUID);
+
+    /// Mutate attributes.
+    fn update_attribute(&mut self, uid: &EntityUID, key: SmolStr, value: Value);
+    fn remove_attribute(&mut self, uid: &EntityUID, key: &SmolStr);
+
+    /// Consume the store and produce Cedar’s `Entities` in one bulk step.
+    fn into_entities(self) -> Entities;
+
+    /*     /// Mutate the indirect‐ancestor set.
+    fn add_indirect_ancestor(&mut self, uid: &EntityUID, anc: EntityUID);
+    fn remove_indirect_ancestor(&mut self, uid: &EntityUID, anc: &EntityUID);
+
+    /// Mutate tags.
+    fn add_tag(&mut self, uid: &EntityUID, key: SmolStr, value: Value);
+    fn remove_tag(&mut self, uid: &EntityUID, key: &SmolStr); */
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct BasicEntityStore {
+    inner: Entities,
+}
+
+impl BasicEntityStore {
+    pub fn new(entities: Entities) -> Self {
+        Self { inner: entities }
+    }
+
+    fn entity(&self, uid: &EntityUID) -> Option<Entity> {
+        let entity_deref = self.inner.entity(uid);
+
+        match entity_deref {
+            cedar_policy_core::entities::Dereference::Data(content) => Some(content.clone()),
+            _ => None,
+        }
+    }
+
+    fn update_entity(&mut self, entity: Entity) {
+        self.inner = self
+            .inner
+            .clone()
+            .upsert_entities(
+                iter::once(Arc::new(entity)),
+                None::<&NoEntitiesSchema>,
+                TCComputation::ComputeNow,
+                Extensions::none(),
+            )
+            .expect(&format!("Failed to update the entity"));
+    }
+}
+
+impl EntityStore for BasicEntityStore {
+    fn add_parent(&mut self, uid: &EntityUID, parent: EntityUID) {
+        if let Some(mut entity) = self.entity(uid) {
+            entity.add_parent(parent);
+            self.update_entity(entity);
+        } else {
+            panic!("Entity with UID does not exist!");
+        };
+    }
+
+    fn remove_parent(&mut self, uid: &EntityUID, parent: &EntityUID) {
+        if let Some(mut entity) = self.entity(uid) {
+            entity.remove_parent(parent);
+            self.update_entity(entity);
+        } else {
+            panic!("Entity with UID {} does not exist", uid);
+        };
+    }
+
+    fn update_entity(
+        &mut self,
+        uid: EntityUID,
+        attrs: BTreeMap<SmolStr, PartialValue>,
+        parents: HashSet<EntityUID>,
+        tags: BTreeMap<SmolStr, PartialValue>,
+    ) {
+        let mut builder = EntityBuilder::new(uid);
+        builder
+            .with_attrs(attrs)
+            .with_parents(parents)
+            .with_tags(tags);
+        self.update_entity(builder.build());
+    }
+
+    fn remove_entity(&mut self, uid: &EntityUID) {
+        if let Some(_) = self.entity(uid) {
+            self.inner = self
+                .inner
+                .clone()
+                .remove_entities(iter::once(uid.clone()), TCComputation::ComputeNow)
+                .expect("Failed to remove entity");
+        } else {
+            panic!("Entity with UID {} does not exist", uid);
+        }
+    }
+
+    fn update_attribute(&mut self, uid: &EntityUID, key: SmolStr, value: Value) {
+        if let Some(entity) = self.entity(uid) {
+            let mut builder = EntityBuilder::from_entity_ref(&entity);
+            builder.add_attr(key, PartialValue::from(value));
+            self.update_entity(builder.build());
+        } else {
+            panic!("Entity with UID {} does not exist", uid);
+        }
+    }
+
+    fn remove_attribute(&mut self, uid: &EntityUID, key: &SmolStr) {
+        if let Some(entity) = self.entity(uid) {
+            let mut builder = EntityBuilder::from_entity_ref(&entity);
+            builder.remove_attr(key);
+            self.update_entity(builder.build());
+        } else {
+            panic!("Entity with UID {} does not exist", uid);
+        }
+    }
+
+    fn into_entities(self) -> Entities {
+        self.inner
+    }
+
+    /*
+    fn add_indirect_ancestor(&mut self, uid: &EntityUID, anc: EntityUID) {
+        todo!()
+    }
+
+    fn remove_indirect_ancestor(&mut self, uid: &EntityUID, anc: &EntityUID) {
+        todo!()
+    }
+
+    fn add_tag(&mut self, uid: &EntityUID, key: SmolStr, value: Value) {
+        todo!()
+    }
+
+    fn remove_tag(&mut self, uid: &EntityUID, key: &SmolStr) {
+        todo!()
+    }
+    */
+}
