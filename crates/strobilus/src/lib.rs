@@ -9,6 +9,7 @@ pub use cedar_policy_core::parser::parse_policyset;
 
 pub use strobilus_core::ast::CommandSet;
 pub use strobilus_core::interpreter::Interpreter;
+pub use strobilus_core::entities::BasicEntityStore;
 
 pub mod authorization;
 mod policy_engine;

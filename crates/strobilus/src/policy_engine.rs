@@ -1,33 +1,33 @@
 use cedar_policy_core::{
     ast::{PolicySet, Request},
-    authorizer::{Authorizer, Decision},
+    authorizer::{Authorizer as CedarAuthorizer, Decision},
     entities::Entities,
 };
 
+#[derive(Debug, Clone)]
 pub struct PolicyEngine {
-    engine: Authorizer,
+    engine: CedarAuthorizer,
     policy_set: PolicySet,
-    entities: Entities,
 }
 
 impl PolicyEngine {
-    pub fn new(policy_set: PolicySet, entities: Entities) -> Self {
-        let engine = Authorizer::new();
+    pub fn new(policy_set: PolicySet) -> Self {
+        let engine = CedarAuthorizer::new();
         Self {
             engine,
-            policy_set,
-            entities,
+            policy_set
         }
     }
 
     pub fn evaluate(
         &self,
-        request: Request
+        request: &Request,
+        entities: &Entities,
     ) -> Result<Decision, Box<dyn std::error::Error>> {
 
         Ok(self
             .engine
-            .is_authorized(request, &self.policy_set, &self.entities)
+            .is_authorized(request.clone(), &self.policy_set, entities)
             .decision)
     }
 }

@@ -1,25 +1,32 @@
-use cedar_policy_core::{ast::{Context, PolicySet, Request, RequestSchemaAllPass}, authorizer::Decision, entities::Entities, extensions::Extensions};
-use strobilus_core::entity_store::EntityStore;
+use cedar_policy_core::{
+    ast::{Context, PolicySet, Request, RequestSchemaAllPass},
+    authorizer::Decision,
+    entities::Entities,
+    extensions::Extensions,
+};
+use strobilus_core::{ast::CommandSet, interpreter::Interpreter};
 
 use crate::policy_engine::PolicyEngine;
 
+#[derive(Debug, Clone)]
 pub struct Authorizer {
     engine: PolicyEngine,
-    entity_store: EntityStore,
+    interpreter: Interpreter,
 }
 
 impl Authorizer {
-    pub fn new(policies: PolicySet, entities: Entities) -> Self {
-        let entity_store = EntityStore::from_entities(entities);
-        let engine = PolicyEngine::new(
-            policies,
-            entity_store.entities().expect("Failed to get entities"),
-        );
+    pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
+        let engine = PolicyEngine::new(policies);
+        let interpreter = Interpreter::new(commands, entities);
 
         Self {
             engine,
-            entity_store,
+            interpreter,
         }
+    }
+
+    pub fn entities(self) -> Entities {
+        self.interpreter.entity_store()
     }
 
     // TODO: Refactor this function to a struct standalone
@@ -44,10 +51,13 @@ impl Authorizer {
     }
 
     pub fn is_authorized(
-        &self,
-        request: Request
+        &mut self,
+        request: &Request,
     ) -> Result<Decision, Box<dyn std::error::Error>> {
-        self.engine.evaluate(request)
-            .map_err(|e| format!("Failed to evaluate request: {}", e).into())
+        let entities = self.interpreter.clone().entity_store();
+        let decision = self.engine.evaluate(request, &entities)?;
+        self.interpreter.execute(request, decision)?;
+
+        Ok(decision)
     }
 }
