@@ -29,8 +29,6 @@ impl Authorizer {
         self.interpreter.entity_store()
     }
 
-    // TODO: Refactor this function to a struct standalone
-    //       that can be used in the interpreter.
     pub fn request(
         principal: &str,
         action: &str,

@@ -6,7 +6,6 @@ pub(crate) type Node<N> = CedarNode<Option<N>>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     // Basic commands
-    // Ancora non è chiaro cosa usare per gli attributi
     AddParent(Node<Expr>, Node<Expr>),
     RemoveParent(Node<Expr>, Node<Expr>),
     UpdateEntity(Node<Expr>, Node<Expr>, Node<Expr>, Node<Expr>),

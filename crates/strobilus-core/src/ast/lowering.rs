@@ -43,13 +43,10 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
             Ok(AstCommand {
                 kind: CommandKind::UpdateAttribute(
                     expr1.to_ast_expr()?,
-                    // Sporcizia totale, vengono rimosse le virgolette
-                    // che il parser, nonostante le regole, continua a mettere
                     {
                         let _attr = attr.node.expect("Attribute string missing").to_string();
                         _attr[1.._attr.len() - 1].to_owned()
                     },
-                    //attr.to_string(),
                     expr2.to_ast_expr()?,
                 ),
             })
@@ -58,7 +55,6 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
             Ok(AstCommand {
                 kind: CommandKind::RemoveAttribute(
                     expr1.to_ast_expr()?,
-                    // Uguale a sopra
                     {
                         let _attr = attr.node.expect("Attribute string missing").to_string();
                         _attr[1.._attr.len() - 1].to_owned()

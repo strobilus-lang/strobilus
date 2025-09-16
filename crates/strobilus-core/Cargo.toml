@@ -8,6 +8,8 @@ lalrpop = "0.22.2"
 
 [dependencies]
 cedar-policy-core = { workspace = true }
+hashbrown = "0.15.4"
 lalrpop-util = "0.22.2"
+rustc-hash = "2.1.1"
 smol_str = "0.3.2"
 thiserror = "2.0.12"

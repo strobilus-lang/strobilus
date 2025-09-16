@@ -41,13 +41,6 @@ pub trait EntityStore {
     /// Consume the store and produce Cedar’s `Entities` in one bulk step.
     fn into_entities(self) -> Entities;
 
-    /*     /// Mutate the indirect‐ancestor set.
-    fn add_indirect_ancestor(&mut self, uid: &EntityUID, anc: EntityUID);
-    fn remove_indirect_ancestor(&mut self, uid: &EntityUID, anc: &EntityUID);
-
-    /// Mutate tags.
-    fn add_tag(&mut self, uid: &EntityUID, key: SmolStr, value: Value);
-    fn remove_tag(&mut self, uid: &EntityUID, key: &SmolStr); */
 }
 
 #[derive(Debug, Default, Clone)]
@@ -152,22 +145,4 @@ impl EntityStore for BasicEntityStore {
     fn into_entities(self) -> Entities {
         self.inner
     }
-
-    /*
-    fn add_indirect_ancestor(&mut self, uid: &EntityUID, anc: EntityUID) {
-        todo!()
-    }
-
-    fn remove_indirect_ancestor(&mut self, uid: &EntityUID, anc: &EntityUID) {
-        todo!()
-    }
-
-    fn add_tag(&mut self, uid: &EntityUID, key: SmolStr, value: Value) {
-        todo!()
-    }
-
-    fn remove_tag(&mut self, uid: &EntityUID, key: &SmolStr) {
-        todo!()
-    }
-    */
 }
