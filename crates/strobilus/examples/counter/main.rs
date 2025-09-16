@@ -1,16 +1,15 @@
-use strobilus::{authorization::Authorizer, read_entities, read_obligations, read_policies, Interpreter};
+use strobilus::{authorization::Authorizer, read_entities, read_obligations, read_policies};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policies = read_policies("./crates/strobilus/examples/counter/policy.cedar")?;
     let entities = read_entities("./crates/strobilus/examples/counter/entities.json")?;
     let obligations = read_obligations("./crates/strobilus/examples/counter/rules.strobilus")?;
 
-    let authorizer = Authorizer::new(policies, entities.clone());
-    let mut interpreter = Interpreter::new(obligations, entities);
-
+    let mut authorizer = Authorizer::new(policies, obligations, entities);
+    
     println!(
         "--- Entity store BEFORE: {:?}",
-        interpreter.clone().entity_store()
+        authorizer.clone().entities()
     );
 
     let request = Authorizer::request(
@@ -19,12 +18,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         r#"Document::"file.docx""#,
     )?;
 
-    let decision = authorizer.is_authorized(request.clone())?;
-    interpreter.execute::<()>(request, decision)?;
+    authorizer.is_authorized(&request)?;
 
     println!(
         "--- Entity store AFTER: {:?}",
-        interpreter.clone().entity_store()
+        authorizer.clone().entities()
     );
 
     Ok(())
