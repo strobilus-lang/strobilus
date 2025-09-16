@@ -1,0 +1,5 @@
+on allow {
+    if (principal.counter > 0) then {
+        updateAttribute(principal, "counter", principal.counter - 1);
+    }
+}

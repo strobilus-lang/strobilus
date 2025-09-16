@@ -1,0 +1,22 @@
+[
+  {
+    "uid": {
+      "type": "User",
+      "id": "Alice"
+    },
+    "attrs": {
+      "counter": 10
+    },
+    "parents": []
+  },
+  {
+    "uid": {
+      "type": "User",
+      "id": "Bob"
+    },
+    "attrs": {
+      "counter": 0
+    },
+    "parents": []
+  }
+]
