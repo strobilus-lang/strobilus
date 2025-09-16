@@ -1,0 +1,12 @@
+[package]
+name = "rq1"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cedar-policy = "=4.5.0"
+cedar-policy-core = "=4.5.0"
+log = "0.4.27"
+colog = "1.3.0"
+strobilus = { path = "../strobilus" }
+cpu-time = "1.0.0"
