@@ -1,6 +1,6 @@
 use crate::ast::{lower_command_set, CommandSet};
 
-pub mod entity_store;
+pub mod entities;
 pub mod interpreter;
 pub mod parser;
 pub mod ast;
