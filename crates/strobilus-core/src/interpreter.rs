@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use crate::ast::Command;
 use crate::ast::{command::CommandKind, CommandSet};
+use crate::authorizer::EvaluationResult;
 use crate::entities::store::{BasicEntityStore, EntityStore};
 
 #[derive(Debug, Clone)]
@@ -36,19 +37,21 @@ impl Interpreter {
     pub fn execute(
         &mut self,
         request: &Request,
-        decision: Decision,
+        result: EvaluationResult,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let entities = self.entity_store.clone().into_entities();
         let evaluator = Evaluator::new(request.clone(), &entities, Extensions::none());
         let env = SlotEnv::new();
 
-        let root_cmd = match decision {
+        let root_cmd = match result.decision {
             Decision::Allow => &*self.commands.on_allow,
             Decision::Deny => &*self.commands.on_deny,
         };
 
         let mut stack: Vec<&Command> = Vec::new();
         stack.push(root_cmd);
+
+        //
 
         while let Some(cmd) = stack.pop() {
             match cmd.inner_kind() {
@@ -120,6 +123,8 @@ impl Interpreter {
             }
         }
 
+        //
+
         Ok(())
     }
 }
@@ -190,3 +195,15 @@ fn collect_update_entity_args(
         ))),
     }
 }
+
+
+/* /// Helper to create a special Entity "Justification::Perimt" and "Justification::Forbid"
+fn create_justification(result: EvaluationResult, es: &mut BasicEntityStore) {
+
+    let mut attributes = BTreeMap::new();
+    attributes.insert("true", result.satisfied_permits);
+    attributes.insert("false", result.false_permits);
+
+
+
+} */
