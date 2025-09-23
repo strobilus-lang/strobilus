@@ -1,4 +1,4 @@
-use strobilus::{authorization::Authorizer, read_entities, read_obligations, read_policies};
+use strobilus::{Authorizer, read_entities, read_obligations, read_policies};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policies = read_policies("./crates/strobilus/examples/counter/policy.cedar")?;

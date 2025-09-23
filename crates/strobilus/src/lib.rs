@@ -11,8 +11,7 @@ pub use strobilus_core::ast::CommandSet;
 pub use strobilus_core::interpreter::Interpreter;
 pub use strobilus_core::entities::BasicEntityStore;
 
-pub mod authorization;
-mod policy_engine;
+pub use strobilus_core::authorizer::Authorizer;
 
 pub fn read_policies(path: &str) -> Result<PolicySet, Box<dyn std::error::Error>> {
     match fs::read_to_string(path) {
