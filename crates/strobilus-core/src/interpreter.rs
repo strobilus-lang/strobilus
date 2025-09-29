@@ -8,6 +8,7 @@ use cedar_policy_core::{
 };
 use smol_str::SmolStr;
 use std::collections::{BTreeMap, HashSet};
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::ast::Command;
@@ -39,6 +40,8 @@ impl Interpreter {
         request: &Request,
         result: EvaluationResult,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        //
+        create_justification(result.clone(), &mut self.entity_store);
         let entities = self.entity_store.clone().into_entities();
         let evaluator = Evaluator::new(request.clone(), &entities, Extensions::none());
         let env = SlotEnv::new();
@@ -50,8 +53,6 @@ impl Interpreter {
 
         let mut stack: Vec<&Command> = Vec::new();
         stack.push(root_cmd);
-
-        //
 
         while let Some(cmd) = stack.pop() {
             match cmd.inner_kind() {
@@ -124,6 +125,7 @@ impl Interpreter {
         }
 
         //
+        remove_jusification(&mut self.entity_store);
 
         Ok(())
     }
@@ -196,14 +198,50 @@ fn collect_update_entity_args(
     }
 }
 
-
-/* /// Helper to create a special Entity "Justification::Perimt" and "Justification::Forbid"
+/// Helper to create special Entities "Justification::Perimt" and "Justification::Forbid"
 fn create_justification(result: EvaluationResult, es: &mut BasicEntityStore) {
+    let mut attributes_permits = BTreeMap::new();
 
-    let mut attributes = BTreeMap::new();
-    attributes.insert("true", result.satisfied_permits);
-    attributes.insert("false", result.false_permits);
+    let satisfied_permits = PartialValue::from(Value::from(result.satisfied_permits));
+    let false_permits = PartialValue::from(Value::from(result.false_permits));
+    attributes_permits.insert(SmolStr::new("_true"), satisfied_permits);
+    attributes_permits.insert(SmolStr::new("_false"), false_permits);
 
+    let uid_permits = EntityUID::from_str("Justification::\"Permits\"")
+        .expect("Error during creation of Justification::\"Permits\" Entity");
 
+    es.update_entity(
+        uid_permits,
+        attributes_permits,
+        HashSet::new(),
+        BTreeMap::new(),
+    );
 
-} */
+    let mut attributes_frobids = BTreeMap::new();
+
+    let satisfied_forbids = PartialValue::from(Value::from(result.satisfied_forbids));
+    let false_forbids = PartialValue::from(Value::from(result.false_forbids));
+    attributes_frobids.insert(SmolStr::new("_true"), satisfied_forbids);
+    attributes_frobids.insert(SmolStr::new("_false"), false_forbids);
+
+    let uid_forbids = EntityUID::from_str("Justification::\"Forbids\"")
+        .expect("Error during creation of Justification::\"Forbids\" Entity");
+
+    es.update_entity(
+        uid_forbids,
+        attributes_frobids,
+        HashSet::new(),
+        BTreeMap::new(),
+    );
+}
+
+/// Helper for remove special Entities "Justification::Perimt" and "Justification::Forbid"
+fn remove_jusification(es: &mut BasicEntityStore) {
+    let uid_permits = EntityUID::from_str("Justification::\"Permits\"")
+        .expect("Error during creation of Justification::\"Permits\" Entity");
+    es.remove_entity(&uid_permits);
+
+    let uid_forbids = EntityUID::from_str("Justification::\"Forbids\"")
+        .expect("Error during creation of Justification::\"Forbids\" Entity");
+    es.remove_entity(&uid_forbids);
+}
