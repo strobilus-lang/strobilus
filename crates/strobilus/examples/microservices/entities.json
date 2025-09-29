@@ -1,0 +1,57 @@
+[
+    {
+        "uid": {
+            "type": "Group",
+            "id": "secure"
+        },
+        "attrs": {},
+        "parents": []
+    },
+    {
+        "uid": {
+            "type": "Group",
+            "id": "insecure"
+        },
+        "attrs": {},
+        "parents": []
+    },
+    {
+        "uid": {
+            "type": "Microservice",
+            "id": "A"
+        },
+        "attrs": {},
+        "parents": [
+            {
+                "type": "Group",
+                "id": "secure"
+            }
+        ]
+    },
+    {
+        "uid": {
+            "type": "Microservice",
+            "id": "B"
+        },
+        "attrs": {},
+        "parents": [
+            {
+                "type": "Group",
+                "id": "secure"
+            }
+        ]
+    },
+    {
+        "uid": {
+            "type": "Microservice",
+            "id": "C"
+        },
+        "attrs": {},
+        "parents": [
+            {
+                "type": "Group",
+                "id": "insecure"
+            }
+        ]
+    }
+]

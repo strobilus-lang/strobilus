@@ -1,0 +1,6 @@
+on allow {
+    if (Justification::"Permits".satisfied.contains("taint")) then {
+        removeParent(principal, Group::"secure");
+        addParent(principal, Group::"insecure");
+    }
+}
