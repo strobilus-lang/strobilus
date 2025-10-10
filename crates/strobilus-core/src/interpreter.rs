@@ -204,8 +204,8 @@ fn create_justification(result: EvaluationResult, es: &mut BasicEntityStore) {
 
     let satisfied_permits = PartialValue::from(Value::from(result.satisfied_permits));
     let false_permits = PartialValue::from(Value::from(result.false_permits));
-    attributes_permits.insert(SmolStr::new("_true"), satisfied_permits);
-    attributes_permits.insert(SmolStr::new("_false"), false_permits);
+    attributes_permits.insert(SmolStr::new("satisfied"), satisfied_permits);
+    attributes_permits.insert(SmolStr::new("unsatisfied"), false_permits);
 
     let uid_permits = EntityUID::from_str("Justification::\"Permits\"")
         .expect("Error during creation of Justification::\"Permits\" Entity");
@@ -221,8 +221,8 @@ fn create_justification(result: EvaluationResult, es: &mut BasicEntityStore) {
 
     let satisfied_forbids = PartialValue::from(Value::from(result.satisfied_forbids));
     let false_forbids = PartialValue::from(Value::from(result.false_forbids));
-    attributes_frobids.insert(SmolStr::new("_true"), satisfied_forbids);
-    attributes_frobids.insert(SmolStr::new("_false"), false_forbids);
+    attributes_frobids.insert(SmolStr::new("satisfied"), satisfied_forbids);
+    attributes_frobids.insert(SmolStr::new("unsatisfied"), false_forbids);
 
     let uid_forbids = EntityUID::from_str("Justification::\"Forbids\"")
         .expect("Error during creation of Justification::\"Forbids\" Entity");
