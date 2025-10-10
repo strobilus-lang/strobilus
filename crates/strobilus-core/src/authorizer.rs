@@ -82,28 +82,16 @@ pub struct EvaluationResult {
     pub false_forbids: Vec<String>,
 }
 
-fn filter_ids(annotations: HashMap<PolicyID, Arc<Annotations>>) -> Vec<String> {
-    let mut ids = Vec::new();
-    let key = AnyId::from_str("id").expect("Can't convert 'id' key");
-    for value in annotations.values() {
-        match value.get(&key) {
-            Some(annotation) => ids.push(annotation.val.to_string()),
-            _ => {}
-        }
-    }
-    ids
-}
-
-fn filter_false_ids(annotations: HashMap<PolicyID, (ErrorState, Arc<Annotations>)>) -> Vec<String> {
-    let mut ids = Vec::new();
-    let key = AnyId::from_str("id").expect("Can't convert 'id' key");
-    for value in annotations.values() {
-        match value.1.get(&key) {
-            Some(annotation) => ids.push(annotation.val.to_string()),
-            _ => {}
-        }
-    }
-    ids
+fn filter_ids<T, F>(annotations: HashMap<PolicyID, T>, get_ann: F) -> Vec<String>
+where
+    F: Fn(&T) -> &Arc<Annotations>,
+{
+    let key = AnyId::from_str("strobilus_id").expect("Can't convert 'id' key");
+    annotations
+        .values()
+        .filter_map(|v| get_ann(v).get(&key))
+        .map(|a| a.val.to_string())
+        .collect()
 }
 
 impl PolicyEngine {
@@ -123,10 +111,10 @@ impl PolicyEngine {
 
         let decision = partial.clone().concretize().decision;
 
-        let satisfied_permits = filter_ids(partial.satisfied_permits);
-        let false_permits = filter_false_ids(partial.false_permits);
-        let satisfied_forbids = filter_ids(partial.satisfied_forbids);
-        let false_forbids = filter_false_ids(partial.false_forbids);
+        let satisfied_permits = filter_ids(partial.satisfied_permits, |v| v);
+        let false_permits = filter_ids(partial.false_permits, |v| &v.1);
+        let satisfied_forbids = filter_ids(partial.satisfied_forbids, |v| v);
+        let false_forbids = filter_ids(partial.false_forbids, |v| &v.1);
 
         Ok(EvaluationResult {
             decision,
