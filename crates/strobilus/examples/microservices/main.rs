@@ -1,45 +1,61 @@
-use strobilus::{Authorizer, read_entities, read_obligations, read_policies};
+use std::str::FromStr;
+use strobilus::{Context, Entities, PolicySet, Request, StrobilusAuthorizer, read_obligations};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let policies = read_policies("./crates/strobilus/examples/microservices/policy.cedar")?;
-    let entities = read_entities("./crates/strobilus/examples/microservices/entities.json")?;
-    let obligations = read_obligations("./crates/strobilus/examples/microservices/rules.strobilus")?;
+    let policies = PolicySet::from_str(&std::fs::read_to_string(
+        "./crates/strobilus/examples/microservices/policy.cedar",
+    )?)?;
+    let entities = Entities::from_json_str(
+        &std::fs::read_to_string("./crates/strobilus/examples/microservices/entities.json")?,
+        None,
+    )?;
+    let obligations =
+        read_obligations("./crates/strobilus/examples/microservices/rules.strobilus")?;
 
-    let mut authorizer = Authorizer::new(policies, obligations, entities);
-    
+    let mut authorizer = StrobilusAuthorizer::new(policies, obligations, entities);
+
     println!(
         "--- Entity store BEFORE: {:?}",
         authorizer.clone().entities()
     );
 
-    let mut request = Authorizer::request(
-        r#"Microservice::"B""#,
-        r#"Action::"connect""#,
-        r#"Microservice::"A""#,
+    let mut request = Request::new(
+        r#"Microservice::"B""#.parse()?,
+        r#"Action::"connect""#.parse()?,
+        r#"Microservice::"A""#.parse()?,
+        Context::empty(),
+        None,
     )?;
 
-    println!("Can B talk to A?: {:?}", authorizer.is_authorized(&request)?);
+    println!("Can B talk to A?: {:?}", authorizer.is_authorized(request));
 
-    request = Authorizer::request(
-        r#"Microservice::"B""#,
-        r#"Action::"connect""#,
-        r#"Microservice::"C""#,
+    request = Request::new(
+        r#"Microservice::"B""#.parse()?,
+        r#"Action::"connect""#.parse()?,
+        r#"Microservice::"C""#.parse()?,
+        Context::empty(),
+        None,
     )?;
 
-    println!("Can B talk to C?: {:?}", authorizer.is_authorized(&request)?);
+    println!("Can B talk to C?: {:?}", authorizer.is_authorized(request));
 
     println!(
         "--- Entity store AFTER: {:?}",
         authorizer.clone().entities()
     );
 
-   request = Authorizer::request(
-        r#"Microservice::"B""#,
-        r#"Action::"connect""#,
-        r#"Microservice::"A""#,
+    request = Request::new(
+        r#"Microservice::"B""#.parse()?,
+        r#"Action::"connect""#.parse()?,
+        r#"Microservice::"A""#.parse()?,
+        Context::empty(),
+        None,
     )?;
 
-    println!("Can B talk to A again?: {:?}", authorizer.is_authorized(&request)?);
+    println!(
+        "Can B talk to A again?: {:?}",
+        authorizer.is_authorized(request)
+    );
 
     Ok(())
 }

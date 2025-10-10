@@ -10,7 +10,7 @@ permit (
     resource in Group::"insecure"
 );
 
-@id("taint")
+@strobilus_id("taint")
 permit (
     principal in Group::"secure",
     action,

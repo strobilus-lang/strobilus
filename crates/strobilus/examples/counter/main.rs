@@ -1,24 +1,27 @@
-use strobilus::{Authorizer, read_entities, read_obligations, read_policies};
+use std::str::FromStr;
+use strobilus::{read_obligations, Context, Entities, PolicySet, Request, StrobilusAuthorizer};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let policies = read_policies("./crates/strobilus/examples/counter/policy.cedar")?;
-    let entities = read_entities("./crates/strobilus/examples/counter/entities.json")?;
+    let policies = PolicySet::from_str(&std::fs::read_to_string("./crates/strobilus/examples/counter/policy.cedar")?)?;
+    let entities = Entities::from_json_str(&std::fs::read_to_string("./crates/strobilus/examples/counter/entities.json")?, None)?;
     let obligations = read_obligations("./crates/strobilus/examples/counter/rules.strobilus")?;
 
-    let mut authorizer = Authorizer::new(policies, obligations, entities);
+    let mut authorizer = StrobilusAuthorizer::new(policies, obligations, entities);
     
     println!(
         "--- Entity store BEFORE: {:?}",
         authorizer.clone().entities()
     );
 
-    let request = Authorizer::request(
-        r#"User::"Max""#,
-        r#"Action::"read""#,
-        r#"Document::"file.docx""#,
+    let request = Request::new(
+        r#"User::"Max""#.parse()?,
+        r#"Action::"read""#.parse()?,
+        r#"Document::"file.docx""#.parse()?,
+        Context::empty(),
+        None
     )?;
 
-    authorizer.is_authorized(&request)?;
+    authorizer.is_authorized(request);
 
     println!(
         "--- Entity store AFTER: {:?}",
