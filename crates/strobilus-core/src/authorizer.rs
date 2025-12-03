@@ -10,8 +10,10 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use cedar_policy_core::{
     ast::{Annotations, AnyId, PolicyID},
-    authorizer::{Authorizer as CedarAuthorizer, ErrorState},
+    authorizer::Authorizer as CedarAuthorizer,
 };
+
+const STROBILUS_ID: &str = "strobilus_id";
 
 #[derive(Debug, Clone)]
 pub struct Authorizer {
@@ -86,7 +88,7 @@ fn filter_ids<T, F>(annotations: HashMap<PolicyID, T>, get_ann: F) -> Vec<String
 where
     F: Fn(&T) -> &Arc<Annotations>,
 {
-    let key = AnyId::from_str("strobilus_id").expect("Can't convert 'id' key");
+    let key = AnyId::from_str(STROBILUS_ID).expect("Can't convert 'id' key");
     annotations
         .values()
         .filter_map(|v| get_ann(v).get(&key))
