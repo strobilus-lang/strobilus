@@ -42,8 +42,11 @@ pub use err::*;
 
 pub use ast::Effect;
 pub use authorizer::Decision;
+use cedar_policy_core::FromNormalizedStr;
 #[cfg(feature = "partial-eval")]
 use cedar_policy_core::ast::BorrowedRestrictedExpr;
+#[cfg(feature = "symbolic")]
+use cedar_policy_core::ast::Expr;
 use cedar_policy_core::ast::{self, RequestSchema, RestrictedExpr};
 use cedar_policy_core::authorizer;
 use cedar_policy_core::entities::{ContextSchema, Dereference};
@@ -53,7 +56,6 @@ use cedar_policy_core::evaluator::Evaluator;
 use cedar_policy_core::evaluator::RestrictedEvaluator;
 use cedar_policy_core::extensions::Extensions;
 use cedar_policy_core::parser;
-use cedar_policy_core::FromNormalizedStr;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use ref_cast::RefCast;
@@ -3770,6 +3772,11 @@ impl Policy {
             lossless: LosslessPolicy::policy_or_template_text(text),
         }
     }
+
+    #[cfg(feature = "symbolic")]
+    pub fn condition(&self) -> Expr {
+        self.ast.condition()
+    }
 }
 
 impl std::fmt::Display for Policy {
@@ -4675,7 +4682,7 @@ impl Context {
 
 /// Utilities for implementing `IntoIterator` for `Context`
 mod context {
-    use super::{ast, RestrictedExpression};
+    use super::{RestrictedExpression, ast};
 
     /// `IntoIter` iterator for `Context`
     #[derive(Debug)]
@@ -4965,8 +4972,8 @@ action CreateList in Create appliesTo {
         use cool_asserts::assert_matches;
 
         use cedar_policy_core::validator::{
-            types::{EntityRecordKind, Type},
             ValidatorCommonType,
+            types::{EntityRecordKind, Type},
         };
 
         let schema = schema();
