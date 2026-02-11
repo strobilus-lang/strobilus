@@ -8,9 +8,13 @@ use strobilus_core::authorizer;
 #[derive(Debug, Clone)]
 pub struct StrobilusAuthorizer(authorizer::Authorizer);
 
-impl StrobilusAuthorizer {    
+impl StrobilusAuthorizer {
     pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
-        Self(authorizer::Authorizer::new(policies.ast, commands, entities.0))
+        Self(authorizer::Authorizer::new(
+            policies.ast,
+            commands,
+            entities.0,
+        ))
     }
 
     pub fn entities(self) -> Entities {
@@ -25,10 +29,27 @@ impl StrobilusAuthorizer {
     }
 }
 
-pub fn read_obligations(path: &str) -> Result<CommandSet, Box<dyn std::error::Error>> {
+/// Generates an empty `CommandSet`.
+pub fn empty_obligations() -> CommandSet {
+    CommandSet::new()
+}
+
+/// Parse a `CommandSet` from a provided string.
+pub fn parse_obligations(obligations: &str) -> Result<CommandSet, Box<dyn std::error::Error>> {
+    strobilus_core::parse_obligations(obligations).map_err(|e| {
+        format!(
+            "Failed to parse obligations from string {}: {}",
+            obligations, e
+        )
+        .into()
+    })
+}
+
+/// Parse a `CommandSet` from a path's file 
+pub fn parse_obligations_file(path: &str) -> Result<CommandSet, Box<dyn std::error::Error>> {
     match std::fs::read_to_string(path) {
         Ok(text) => strobilus_core::parse_obligations(&text)
             .map_err(|e| format!("Failed to parse obligations from {}: {}", path, e).into()),
-        Err(_) => Ok(CommandSet::new()),
+        Err(e) => Err(Box::new(e)),
     }
 }
