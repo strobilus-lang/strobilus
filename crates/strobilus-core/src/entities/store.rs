@@ -12,7 +12,7 @@ use cedar_policy_core::{
 
 use smol_str::SmolStr;
 
-use crate::entities::builder::EntityBuilder;
+use crate::entities::{builder::EntityBuilder, error::EntityStoreError};
 
 /// All the operations you can perform *via* an EntityStore,
 /// each taking the `EntityUID` to identify the target.
@@ -21,8 +21,12 @@ use crate::entities::builder::EntityBuilder;
 /// as the original Entities provided by Cedar.
 pub trait EntityStore {
     /// Mutate the direct‐parent set of a given entity.
-    fn add_parent(&mut self, uid: &EntityUID, parent: EntityUID);
-    fn remove_parent(&mut self, uid: &EntityUID, parent: &EntityUID);
+    fn add_parent(&mut self, uid: &EntityUID, parent: EntityUID) -> Result<(), EntityStoreError>;
+    fn remove_parent(
+        &mut self,
+        uid: &EntityUID,
+        parent: &EntityUID,
+    ) -> Result<(), EntityStoreError>;
 
     /// Mutate the entity itself.
     fn update_entity(
@@ -31,12 +35,17 @@ pub trait EntityStore {
         attrs: BTreeMap<SmolStr, PartialValue>,
         anc: HashSet<EntityUID>,
         tags: BTreeMap<SmolStr, PartialValue>,
-    );
-    fn remove_entity(&mut self, uid: &EntityUID);
+    ) -> Result<(), EntityStoreError>;
+    fn remove_entity(&mut self, uid: &EntityUID) -> Result<(), EntityStoreError>;
 
     /// Mutate attributes.
-    fn update_attribute(&mut self, uid: &EntityUID, key: SmolStr, value: Value);
-    fn remove_attribute(&mut self, uid: &EntityUID, key: &SmolStr);
+    fn update_attribute(
+        &mut self,
+        uid: &EntityUID,
+        key: SmolStr,
+        value: Value,
+    ) -> Result<(), EntityStoreError>;
+    fn remove_attribute(&mut self, uid: &EntityUID, key: &SmolStr) -> Result<(), EntityStoreError>;
 
     /// Consume the store and produce Cedar’s `Entities` in one bulk step.
     fn into_entities(self) -> Entities;
@@ -69,37 +78,42 @@ impl BasicEntityStore {
         }
     }
 
-    fn update_entity(&mut self, entity: Entity) {
-        self.inner = self
-            .inner
-            .clone()
-            .upsert_entities(
-                iter::once(Arc::new(entity)),
-                None::<&NoEntitiesSchema>,
-                TCComputation::ComputeNow,
-                Extensions::none(),
-            )
-            .expect(&format!("Failed to update the entity"));
+    fn update_entity(&mut self, entity: Entity) -> Result<(), EntityStoreError> {
+        match self.inner.clone().upsert_entities(
+            iter::once(Arc::new(entity)),
+            None::<&NoEntitiesSchema>,
+            TCComputation::ComputeNow,
+            Extensions::none(),
+        ) {
+            Ok(new_entities) => Ok(self.inner = new_entities),
+            Err(_) => Err(EntityStoreError::BuildEntities),
+        }
     }
 }
 
 impl EntityStore for BasicEntityStore {
-    fn add_parent(&mut self, uid: &EntityUID, parent: EntityUID) {
+    fn add_parent(&mut self, uid: &EntityUID, parent: EntityUID) -> Result<(), EntityStoreError> {
         if let Some(mut entity) = self.entity(uid) {
             entity.add_parent(parent);
-            self.update_entity(entity);
+            self.update_entity(entity)?;
+            Ok(())
         } else {
-            panic!("Entity with UID does not exist!");
-        };
+            Err(EntityStoreError::EntityNotFound(uid.clone()))
+        }
     }
 
-    fn remove_parent(&mut self, uid: &EntityUID, parent: &EntityUID) {
+    fn remove_parent(
+        &mut self,
+        uid: &EntityUID,
+        parent: &EntityUID,
+    ) -> Result<(), EntityStoreError> {
         if let Some(mut entity) = self.entity(uid) {
             entity.remove_parent(parent);
-            self.update_entity(entity);
+            self.update_entity(entity)?;
+            Ok(())
         } else {
-            panic!("Entity with UID {} does not exist", uid);
-        };
+            Err(EntityStoreError::EntityNotFound(uid.clone()))
+        }
     }
 
     fn update_entity(
@@ -108,44 +122,55 @@ impl EntityStore for BasicEntityStore {
         attrs: BTreeMap<SmolStr, PartialValue>,
         parents: HashSet<EntityUID>,
         tags: BTreeMap<SmolStr, PartialValue>,
-    ) {
+    ) -> Result<(), EntityStoreError> {
         let mut builder = EntityBuilder::new(uid);
         builder
             .with_attrs(attrs)
             .with_parents(parents)
             .with_tags(tags);
-        self.update_entity(builder.build());
+        self.update_entity(builder.build())
     }
 
-    fn remove_entity(&mut self, uid: &EntityUID) {
+    fn remove_entity(&mut self, uid: &EntityUID) -> Result<(), EntityStoreError> {
         if let Some(_) = self.entity(uid) {
-            self.inner = self
+            if let Ok(new_entities) = self
                 .inner
                 .clone()
                 .remove_entities(iter::once(uid.clone()), TCComputation::ComputeNow)
-                .expect("Failed to remove entity");
+            {
+                Ok(self.inner = new_entities)
+            } else {
+                Err(EntityStoreError::BuildEntities)
+            }
         } else {
-            panic!("Entity with UID {} does not exist", uid);
+            Err(EntityStoreError::EntityNotFound(uid.clone()))
         }
     }
 
-    fn update_attribute(&mut self, uid: &EntityUID, key: SmolStr, value: Value) {
+    fn update_attribute(
+        &mut self,
+        uid: &EntityUID,
+        key: SmolStr,
+        value: Value,
+    ) -> Result<(), EntityStoreError> {
         if let Some(entity) = self.entity(uid) {
             let mut builder = EntityBuilder::from_entity_ref(&entity);
             builder.add_attr(key, PartialValue::from(value));
-            self.update_entity(builder.build());
+            self.update_entity(builder.build())?;
+            Ok(())
         } else {
-            panic!("Entity with UID {} does not exist", uid);
+            Err(EntityStoreError::EntityNotFound(uid.clone()))
         }
     }
 
-    fn remove_attribute(&mut self, uid: &EntityUID, key: &SmolStr) {
+    fn remove_attribute(&mut self, uid: &EntityUID, key: &SmolStr) -> Result<(), EntityStoreError> {
         if let Some(entity) = self.entity(uid) {
             let mut builder = EntityBuilder::from_entity_ref(&entity);
             builder.remove_attr(key);
-            self.update_entity(builder.build());
+            self.update_entity(builder.build())?;
+            Ok(())
         } else {
-            panic!("Entity with UID {} does not exist", uid);
+            Err(EntityStoreError::EntityNotFound(uid.clone()))
         }
     }
 
