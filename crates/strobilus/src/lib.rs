@@ -21,6 +21,17 @@ impl StrobilusAuthorizer {
         Entities(self.0.entities())
     }
 
+    /// Dump an `Entities` object into an in-memory JSON object.
+    ///
+    /// The resulting JSON will be suitable for parsing in via
+    /// `from_json_*`, and will be parse-able even with no `Schema`.
+    ///
+    /// To read an `Entities` object from JSON, use
+    /// [`Self::from_json_file`], [`Self::from_json_value`], or [`Self::from_json_str`].
+    pub fn to_json_value(&self) -> Result<serde_json::Value, cedar_policy_core::entities::err::EntitiesError> {
+        self.0.clone().entities().to_json_value()
+    }
+
     pub fn is_authorized(&mut self, request: Request) -> Decision {
         match self.0.is_authorized(&request.0) {
             Ok(decision) => decision,

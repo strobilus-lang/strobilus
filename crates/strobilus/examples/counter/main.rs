@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!(
         "--- Entity store BEFORE: {:?}",
-        authorizer.clone().entities()
+        authorizer.to_json_value()
     );
 
     let request = Request::new(
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(
         "--- Entity store AFTER: {:?}",
-        authorizer.clone().entities()
+        authorizer.to_json_value()
     );
 
     Ok(())
