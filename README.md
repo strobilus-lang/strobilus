@@ -1,4 +1,5 @@
 # Strobilus
+Strobilus is a Domain-Specific-Language for express and evaluate stateful access control policies.
 
 ## Structure
 ```
