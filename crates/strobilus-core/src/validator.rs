@@ -7,6 +7,8 @@ use crate::ast::{command::CommandKind, CommandSet, Command};
 
 use cedar_policy_core::{
     ast::PolicySet,
+    ast::Template,
+    //ast::Type,
     entities::Entities,
     authorizer::Decision,
     validator::ValidatorSchema,
@@ -18,8 +20,16 @@ use cedar_policy_core::{
     validator::ValidationMode,
     validator::types::Capability,
     validator::types::CapabilitySet,
+    validator::typecheck::PolicyCheck,
+    validator::types::Type,
     ast::PolicyID,
+    ast::ResourceConstraint,
+    ast::ActionConstraint,
+    ast::PrincipalConstraint,
+    ast::Effect,
+    ast::Annotations,
 };
+
 
 
 #[derive(Debug, Clone)]
@@ -99,26 +109,77 @@ impl Validator {
              CommandKind::RemoveEntity(expr) => {println!("Remove entity command kind");}
 
              CommandKind::UpdateAttribute(expr, attr, value_expr) => {
-                 /*schema.unlinked_request_envs(ValidationMode::Strict).collect()
-                 .iter()
-                 .flat_map(|unlinked_e| {
-                        let single_env_typechecker = SingleEnvTypechecker {
-                            schema: schema,
-                            extensions: Extensions::all_available(),
-                            mode: ValidationMode::Strict,
-                            policy_id: PolicyID::from_string("id"),
-                            request_env: &unlinked_e,
-                        };
-                        let check = single_env_typechecker.typecheck(CapabilitySet::new(), expr, errors);
-                            (unlinked_e, check)
-                     })
-                     .collect();*/
+                println!("Update attribute command kind");
+
+                 
+                 // creazione del tamplate
+                 let t = Template::new(
+                        PolicyID::from_string("__typecheck_probe__"),
+                        None,                         
+                        Annotations::new(),           
+                        Effect::Permit,               
+                        PrincipalConstraint::any(),   
+                        ActionConstraint::any(),      
+                        ResourceConstraint::any(),     
+                        expr.clone(),                          
+                    );
+
+                 // typecheck del tamplate
+                 let typecheck_answers = typecheck.typecheck_by_request_env(&t);    
+                
+                 // studio del risultato del typecheck
+                 let (all_false, all_succ) = typecheck_answers.into_iter().fold(
+                    (true, true),
+                    |(all_false, all_succ), (_, check)| match check {
+                        PolicyCheck::Success(_) => {println!("Success"); (false, all_succ)}
+                        PolicyCheck::Irrelevant(err, _) => {println!("Irrelevant");  (false, all_succ)}
+                        PolicyCheck::Fail(ref err) => {    for e in err {
+                            if let ValidationError::UnexpectedType(unexpected) = e {
+                                println!("    expr {{{}}}     has type {:?}",expr , &unexpected.actual.to_string());
+                            }
+                        }
+                        (false, all_succ)}
+                                    },
+                );
 
 
-                 println!("Update attribute command kind");
-                 println!("    {}", expr);
+
+                 //println!("    {}", expr);
                  println!("    {}", attr);
-                 println!("    {}", value_expr);
+
+
+
+
+                 // creazione del tamplate
+                 let t2 = Template::new(
+                        PolicyID::from_string("__typecheck_probe__"),
+                        None,                         
+                        Annotations::new(),           
+                        Effect::Permit,               
+                        PrincipalConstraint::any(),   
+                        ActionConstraint::any(),      
+                        ResourceConstraint::any(),     
+                        value_expr.clone(),                          
+                    );
+
+                 // typecheck del tamplate
+                 let typecheck_answers2 = typecheck.typecheck_by_request_env(&t2);    
+                
+                 // studio del risultato del typecheck
+                 let (all_false, all_succ) = typecheck_answers2.into_iter().fold(
+                    (true, true),
+                    |(all_false, all_succ), (_, check)| match check {
+                        PolicyCheck::Success(_) => {println!("Success"); (false, all_succ)}
+                        PolicyCheck::Irrelevant(err, _) => {println!("Irrelevant");  (false, all_succ)}
+                        PolicyCheck::Fail(ref err) => {    for e in err {
+                            if let ValidationError::UnexpectedType(unexpected) = e {
+                                println!("    value_expr {{{}}}     has type {:?}",value_expr , &unexpected.actual.to_string());
+                            }
+                        }
+                        (false, all_succ)}
+                                    },
+                );
+                 //println!("    {}", value_expr);
              }
 
              CommandKind::RemoveAttribute(expr, attr) => {println!("Revmove attribute command kind");}
@@ -174,6 +235,22 @@ impl Validator {
 
         Ok(())
     }
+
+    /*fn type_to_string(ty: &Type) -> String {
+        match ty {
+            Type::Bool => "Bool".to_string(),
+            Type::Long => "Long".to_string(),
+            Type::String => "String".to_string(),
+            Type::Set => "Set".to_string(),
+            Type::Record => "Record".to_string(),
+
+            // Per Entity, stampa solo il nome del tipo, ad esempio "User"
+            Type::Entity { ty } => ty.to_string(),
+
+            // Per gli extension type, stampa il nome
+            Type::Extension { name } => name.to_string(),
+        }
+    }*/
 
     /*fn read_schema_from_file(path: impl AsRef<Path>) -> Result<Schema> {
         let path = path.as_ref();
