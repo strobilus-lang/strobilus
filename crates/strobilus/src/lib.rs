@@ -81,3 +81,65 @@ pub fn parse_obligations_file(path: &str) -> Result<CommandSet, Box<dyn std::err
         Err(e) => Err(Box::new(e)),
     }
 }
+
+
+
+// ---------------------------------- OPTIMISTIC WRAPPER IMPLEMENTATION ----------------------------------
+
+pub struct OptimisticWrapper (authorizer::OptimisticAuthorizer);
+
+impl OptimisticWrapper {
+    pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
+        Self(authorizer::OptimisticAuthorizer::new(
+            policies.ast,
+            commands,
+            entities.0,
+        ))
+    }
+
+    pub fn entities(self) -> Entities {
+        Entities(self.0.entities())
+    }
+
+    /// Dump an `Entities` object into an in-memory JSON object.
+    ///
+    /// The resulting JSON will be suitable for parsing in via
+    /// `from_json_*`, and will be parse-able even with no `Schema`.
+    ///
+    /// To read an `Entities` object from JSON, use
+    /// [`Self::from_json_file`], [`Self::from_json_value`], or [`Self::from_json_str`].
+    pub fn to_json_value(&self) -> Result<serde_json::Value, cedar_policy_core::entities::err::EntitiesError> {
+        self.0.clone().entities().to_json_value()
+    }
+
+    pub fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+
+    // Call internal is_authorized, retries 3 times in case of internal error, then returns Deny
+    pub fn is_authorized(&mut self, request: Request) -> Decision {
+        let mut return_value = Decision::Deny;
+        let mut retry_flag = true;
+        let mut attempt_count = 3;
+
+        while (retry_flag == true) && (attempt_count > 0) {
+            retry_flag = false;
+            return_value = match self.0.is_authorized(&request.0) {
+                Ok(decision) => decision,
+                Err(_) => {
+                    print_thread_id("RETRY");
+                    retry_flag = true;
+                    attempt_count -= 1;
+                    Decision::Deny
+                },
+            };
+        }
+
+        return_value
+    }
+}
+
+pub fn print_thread_id(string: &str) {
+    use std::thread::*;
+    println!("--- THREAD {:?}: {}", current().id(), string);
+}

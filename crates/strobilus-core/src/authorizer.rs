@@ -143,3 +143,61 @@ impl PolicyEngine {
         })
     }
 }
+
+
+
+// ---------------------------------- OPTIMISTIC AUTHORIZER IMPLEMENTATION ----------------------------------
+
+use crate::interpreter::VersionedInterpreter;
+
+#[derive(Debug, Clone)]
+pub struct OptimisticAuthorizer {
+    engine: PolicyEngine,
+    interpreter: VersionedInterpreter,
+}
+
+impl OptimisticAuthorizer {
+    
+    pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
+        Self {
+            engine: PolicyEngine::new(policies),
+            interpreter: VersionedInterpreter::new(commands, entities),
+        }
+    }
+
+    pub fn entities(&self) -> Entities {
+        self.interpreter.entity_store()
+    }
+
+    pub fn is_authorized(
+        &mut self,
+        request: &Request,
+    ) -> Result<Decision, Box<dyn std::error::Error>> {
+        
+        // Do a copy of the whole InnerInterpreter
+        let interpreter_copy = self.interpreter.get_interpreter_copy();
+
+        // Get the entities
+        let entities = interpreter_copy.entity_store();
+        
+        // Evaluate request on the entities
+        let result = self.engine.evaluate(request, &entities)?;
+
+        // Insert a delay before entities store is modified to force race condition
+        use std::{time::Duration, thread};
+        thread::sleep(Duration::from_millis(200));
+        
+        // Execute the obligations on the entity store
+        let return_value = match self.interpreter.execute(request, result.clone(), interpreter_copy) {
+            Ok(()) => Ok(result.decision),
+            Err(e) => Err(e)
+        };
+
+        return_value
+    }
+}
+
+pub fn print_thread_id(string: &str) {
+    use std::thread::*;
+    println!("--- THREAD {:?}: {}", current().id(), string);
+}
