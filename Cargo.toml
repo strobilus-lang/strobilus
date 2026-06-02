@@ -7,4 +7,5 @@ members = [
 ]
 
 [workspace.dependencies]
-cedar-policy-core = { version = "=4.5.0" } 
+# cedar-policy-core = { version = "=4.5.0" }
+cedar-policy-core = { path = "../../cedar/cedar-test-pub-fun/cedar-policy-core" }

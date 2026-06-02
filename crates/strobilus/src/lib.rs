@@ -21,23 +21,20 @@ pub use api::*;
 pub use strobilus_core::ast::CommandSet;
 use strobilus_core::authorizer;
 use strobilus_core::validator;
+use cedar_policy_core::validator::ValidatorSchema;
 
 /// Validator object, which provides responses to validator queries
 #[derive(Debug, Clone)]
 pub struct StrobilusValidator(validator::Validator);
 
 impl StrobilusValidator {
-    pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
+    pub fn new(commands: CommandSet, schema: ValidatorSchema) -> Self {
         Self(validator::Validator::new(
-            policies.ast,
             commands,
-            entities.0,
+            schema,
         ))    
     }
 
-    pub fn print(&self) {
-        strobilus_core::validator::Validator::print();
-    }
 
     pub fn validate(&mut self) {
         self.0.validate();

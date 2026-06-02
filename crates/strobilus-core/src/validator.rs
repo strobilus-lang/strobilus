@@ -22,246 +22,202 @@ use cedar_policy_core::{
     validator::types::CapabilitySet,
     validator::typecheck::PolicyCheck,
     validator::types::Type,
+    validator::types::RequestEnv,
     ast::PolicyID,
     ast::ResourceConstraint,
     ast::ActionConstraint,
     ast::PrincipalConstraint,
     ast::Effect,
     ast::Annotations,
+    ast::Expr,
 };
 
 
 
 #[derive(Debug, Clone)]
 pub struct Validator {
-    policies: PolicySet,
     commands: CommandSet,
-    entities: Entities,
+    schema: ValidatorSchema,
+    //typecheckerr: Typechecker,
 }
 
 impl Validator {
-    pub fn new (policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
-        Self {
-            policies,
-            commands,
-            entities,
-        }
-    }
+    pub fn new (commands: CommandSet, schema: ValidatorSchema) -> Self {
+        //let (schema,warnings) = ValidatorSchema::from_cedarschema_str(&std::fs::read_to_string("./crates/strobilus/examples/validator/schema.cedarschema")?,Extensions::none())?;
 
-    pub fn print() {
-        println!("Hello 2.0");
+        Self {
+            commands,
+            schema,
+        }
     }
 
     pub fn validate(&mut self) -> Result<(), Box<dyn std::error::Error>>{
-        println!("Hello From Validator"); 
         
-        let (schema,warnings) = ValidatorSchema::from_cedarschema_str(&std::fs::read_to_string("./crates/strobilus/examples/validator/schema.cedarschema")?,Extensions::none())?;
+        // Unlinked request enviramets
+        let unlinked_env: Vec<RequestEnv> = self.schema.unlinked_request_envs(ValidationMode::Strict).collect(); 
 
-        //let cedar_validato = CedarValidator::new(schema); 
-        
+
+        // Typechecker
         let mut errors : HashSet<ValidationError> = HashSet::new();
         let mut warnings : HashSet<ValidationWarning> = HashSet::new();
 
-        let typecheck = Typechecker::new(&schema, ValidationMode::Strict);
-
- 
+        let typecheck = Typechecker::new(&self.schema, ValidationMode::Strict); 
 
 
+        println!("Validate on allow commands");
+        self.typecheck_com_by_single_env(&*self.commands.on_allow,&typecheck);
 
 
-
-
-
-
-
-        let root_cmd = &*self.commands.on_allow;
-
-        let mut stack: Vec<&Command> = Vec::new();
-        stack.push(root_cmd);
-
-        println!("");
-        println!("");
-        println!("Print on allow commands");
-        println!("");
-        while let Some(cmd) = stack.pop() {
-            match cmd.inner_kind() {
-             CommandKind::Sequence(c1, c2) => {
-                 println!("sequence command kind");
-                 
-                 stack.push(c2);
-                 stack.push(c1);
-             }
-
-             CommandKind::IfThenElse(cond, then_cmd, else_cmd) => {
-                println!("If then else command kind");
-                println!("    {}", cond);
-
-                stack.push(then_cmd);
-                stack.push(else_cmd);
-             }
-
-             CommandKind::AddParent(expr_c, expr_p) => {println!("Add parent command kind");}
-
-             CommandKind::RemoveParent(expr_c, expr_p) => {println!("Remove parent command kind");}
-
-             CommandKind::UpdateEntity(uid_e, attrs_e, anc_e, tags_e) => {println!("Update entity command kind");}
-
-             CommandKind::RemoveEntity(expr) => {println!("Remove entity command kind");}
-
-             CommandKind::UpdateAttribute(expr, attr, value_expr) => {
-                println!("Update attribute command kind");
-
-                 
-                 // creazione del tamplate
-                 let t = Template::new(
-                        PolicyID::from_string("__typecheck_probe__"),
-                        None,                         
-                        Annotations::new(),           
-                        Effect::Permit,               
-                        PrincipalConstraint::any(),   
-                        ActionConstraint::any(),      
-                        ResourceConstraint::any(),     
-                        expr.clone(),                          
-                    );
-
-                 // typecheck del tamplate
-                 let typecheck_answers = typecheck.typecheck_by_request_env(&t);    
-                
-                 // studio del risultato del typecheck
-                 let (all_false, all_succ) = typecheck_answers.into_iter().fold(
-                    (true, true),
-                    |(all_false, all_succ), (_, check)| match check {
-                        PolicyCheck::Success(_) => {println!("Success"); (false, all_succ)}
-                        PolicyCheck::Irrelevant(err, _) => {println!("Irrelevant");  (false, all_succ)}
-                        PolicyCheck::Fail(ref err) => {    for e in err {
-                            if let ValidationError::UnexpectedType(unexpected) = e {
-                                println!("    expr {{{}}}     has type {:?}",expr , &unexpected.actual.to_string());
-                            }
-                        }
-                        (false, all_succ)}
-                                    },
-                );
+        println!("Validate on deny commands");
+        self.typecheck_com_by_single_env(&*self.commands.on_deny,&typecheck);
 
 
 
-                 //println!("    {}", expr);
-                 println!("    {}", attr);
-
-
-
-
-                 // creazione del tamplate
-                 let t2 = Template::new(
-                        PolicyID::from_string("__typecheck_probe__"),
-                        None,                         
-                        Annotations::new(),           
-                        Effect::Permit,               
-                        PrincipalConstraint::any(),   
-                        ActionConstraint::any(),      
-                        ResourceConstraint::any(),     
-                        value_expr.clone(),                          
-                    );
-
-                 // typecheck del tamplate
-                 let typecheck_answers2 = typecheck.typecheck_by_request_env(&t2);    
-                
-                 // studio del risultato del typecheck
-                 let (all_false, all_succ) = typecheck_answers2.into_iter().fold(
-                    (true, true),
-                    |(all_false, all_succ), (_, check)| match check {
-                        PolicyCheck::Success(_) => {println!("Success"); (false, all_succ)}
-                        PolicyCheck::Irrelevant(err, _) => {println!("Irrelevant");  (false, all_succ)}
-                        PolicyCheck::Fail(ref err) => {    for e in err {
-                            if let ValidationError::UnexpectedType(unexpected) = e {
-                                println!("    value_expr {{{}}}     has type {:?}",value_expr , &unexpected.actual.to_string());
-                            }
-                        }
-                        (false, all_succ)}
-                                    },
-                );
-                 //println!("    {}", value_expr);
-             }
-
-             CommandKind::RemoveAttribute(expr, attr) => {println!("Revmove attribute command kind");}
-
-             CommandKind::Skip => {println!("Skip command kind");}
-           }
-        }
-
-        let root_cmd = &*self.commands.on_deny;
-
-        let mut stack: Vec<&Command> = Vec::new();
-        stack.push(root_cmd);
         
-        println!("");
-        println!("");
-        println!("Print on deny commands");
-        println!("");
-        while let Some(cmd) = stack.pop() {
-            match cmd.inner_kind() {
-             CommandKind::Sequence(c1, c2) => {
-                 println!("sequence command kind");
-                 stack.push(c2);
-                 stack.push(c1);
-             }
-
-             CommandKind::IfThenElse(cond, then_cmd, else_cmd) => {
-                println!("If then else command kind");
-                println!("    {}", cond);
-
-                stack.push(then_cmd);
-                stack.push(else_cmd);
-             }
-
-             CommandKind::AddParent(expr_c, expr_p) => {println!("Add parent command kind");}
-
-             CommandKind::RemoveParent(expr_c, expr_p) => {println!("Remove parent command kind");}
-
-             CommandKind::UpdateEntity(uid_e, attrs_e, anc_e, tags_e) => {println!("Update entity command kind");}
-
-             CommandKind::RemoveEntity(expr) => {println!("Remove entity command kind");}
-
-             CommandKind::UpdateAttribute(expr, attr, value_expr) => {
-                 println!("Update attribute command kind");
-                 println!("    {}", expr);
-                 println!("    {}", attr);
-                 println!("    {}", value_expr);}
-
-             CommandKind::RemoveAttribute(expr, attr) => {println!("Revmove attribute command kind");}
-
-             CommandKind::Skip => {println!("Skip command kind");}
-           }
-        }
-
         Ok(())
     }
 
-    /*fn type_to_string(ty: &Type) -> String {
-        match ty {
-            Type::Bool => "Bool".to_string(),
-            Type::Long => "Long".to_string(),
-            Type::String => "String".to_string(),
-            Type::Set => "Set".to_string(),
-            Type::Record => "Record".to_string(),
+    fn typecheck_com_by_single_env(&self, command: &Command, typecheck: &Typechecker) {
+        match command.inner_kind() {
+             CommandKind::Sequence(c1, c2) => {
+                 println!("    sequence command kind");
+                
+                 self.typecheck_com_by_single_env(c2,&typecheck);
+                 self.typecheck_com_by_single_env(c1,&typecheck);
+                 //stack.push(c2);
+                 //stack.push(c1);
+             }
 
-            // Per Entity, stampa solo il nome del tipo, ad esempio "User"
-            Type::Entity { ty } => ty.to_string(),
+             CommandKind::IfThenElse(cond, then_cmd, else_cmd) => {
+                println!("    If then else command kind");
+                println!("        {}", cond);
+                
+                self.typecheck_com_by_single_env(then_cmd,&typecheck);
+                self.typecheck_com_by_single_env(else_cmd,&typecheck);
+                //stack.push(then_cmd);
+                //stack.push(else_cmd);
+             }
 
-            // Per gli extension type, stampa il nome
-            Type::Extension { name } => name.to_string(),
+             CommandKind::AddParent(expr_c, expr_p) => {println!("    Add parent command kind");}
+
+             CommandKind::RemoveParent(expr_c, expr_p) => {println!("    Remove parent command kind");}
+
+             CommandKind::UpdateEntity(uid_e, attrs_e, anc_e, tags_e) => {println!("    Update entity command kind");}
+
+             CommandKind::RemoveEntity(expr) => {println!("    Remove entity command kind");}
+
+             CommandKind::UpdateAttribute(expr, attr, value_expr) => {
+                println!("    Update attribute command kind : UpdateAttribute( expr, attr, value_expr)");
+
+
+                let e1_types = self.infer_expr_type(&typecheck, expr);
+
+                println!("        (expr) \"{}\" : (env,type)",expr);
+                for (i, tipo) in e1_types.iter().enumerate() {
+                    match tipo {
+                        Some(t) => println!("           ({},{})", i, t),
+                        None    => println!("           ({},tipo non inferito)", i),
+                   }
+                }
+                println!("");
+
+                
+                println!("       {}", attr);
+                println!("");
+
+                let e2_types = self.infer_expr_type(&typecheck, value_expr);
+
+                println!("        (expr) \"{}\" : (env,type)",value_expr);
+                for (i, tipo) in e2_types.iter().enumerate() {
+                   match tipo {
+                        Some(t) => println!("           ({},{})", i, t),
+                        None    => println!("           ({},tipo non inferito)", i),
+                   }
+                }
+                println!("");
+             }
+
+             CommandKind::RemoveAttribute(expr, attr) => {println!("    Revmove attribute command kind");}
+
+             CommandKind::Skip => {println!("    Skip command kind");}
+           }
         }
-    }*/
 
-    /*fn read_schema_from_file(path: impl AsRef<Path>) -> Result<Schema> {
-        let path = path.as_ref();
-        let schema_src = read_from_file(path, "schema")?;
-        let (schema, warnings) = Schema::from_cedarschema_str(&schema_src)
-             .wrap_err_with(|| format!("failed to parse schema from file {}", path.display()))?;
-        for warning in warnings {
-            let report = miette::Report::new(warning);
-            eprintln!("{report:?}");
-        }
-        Ok(schema) 
+    fn infer_expr_type(
+        &self,
+        typecheck: &Typechecker,
+        expr: &Expr,
+    ) -> Vec<Option<Type>> {
+        // Costruisci il template probe
+        let template = Template::new(
+            PolicyID::from_string("__typecheck_probe__"),
+            None,
+            Annotations::new(),
+            Effect::Permit,
+            PrincipalConstraint::any(),
+            ActionConstraint::any(),
+            ResourceConstraint::any(),
+            expr.clone(),
+        );
+
+        // Typecheck su tutti gli environment
+        typecheck
+            .typecheck_by_request_env(&template)
+            .into_iter()
+            .map(|(_, check)| match check {
+                // Caso SUCCESS — il tipo è dentro l'expr annotata
+                PolicyCheck::Success(typed_expr) => {
+                    // typed_expr è Expr<Option<Type>>
+                    // .data() legge l'annotazione sul nodo radice
+                    typed_expr.data().clone()
+                }
+                // Caso IRRELEVANT — Cedar ha determinato che la policy
+                // è sempre False in questo env (tipo False)
+                PolicyCheck::Irrelevant(_, _) => {
+                    Some(Type::singleton_boolean(false))
+                }
+                // Caso FAIL — errore di tipo, proviamo a recuperare
+                // il tipo reale dagli errori UnexpectedType
+                PolicyCheck::Fail(errors) => {
+                    errors.iter().find_map(|e| {
+                        if let ValidationError::UnexpectedType(u) = e {
+                            Some(u.actual.clone())
+                        } else {
+                            None
+                        }
+                    })
+                }
+            })
+            .collect()
+    }
+
+    /*fn infer_expr_type2(
+        &self,
+        typecheck: &Typechecker,
+        expr: &Expr,
+    ) -> Vec<Option<Type>> {
+        let template = Template::new(
+            PolicyID::from_string("__typecheck_probe__"),
+            None,
+            Annotations::new(),
+            Effect::Permit,
+            PrincipalConstraint::any(),
+            ActionConstraint::any(),
+            ResourceConstraint::any(),
+            expr.clone(),
+        );
+
+        typecheck
+            .typecheck_by_request_env(&template)
+            .into_iter()
+            .map(|(_, check)| match check {
+                // Entrambi i casi hanno l'Expr annotata — .data() legge il tipo del nodo radice
+                PolicyCheck::Success(typed_expr)        => typed_expr.data().clone(),
+                PolicyCheck::Irrelevant(_, typed_expr)  => typed_expr.data().clone(),
+                // Fail non ha l'Expr annotata — il typecheck non è arrivato a produrla
+                PolicyCheck::Fail(_)                    => None,
+            })
+            .collect()
     }*/
 }
 
