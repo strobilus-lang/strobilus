@@ -12,11 +12,13 @@ use cedar_policy_core::{
     entities::Entities,
     authorizer::Decision,
     validator::ValidatorSchema,
-    extensions::Extensions,
+    extensions::Extensions, 
     validator::Validator as CedarValidator,
     validator::ValidationError,
     validator::ValidationWarning,
+    validator::typecheck::SingleEnvTypechecker,
     validator::typecheck::Typechecker,
+    validator::typecheck::typecheck_answer::TypecheckAnswer,
     validator::ValidationMode,
     validator::types::Capability,
     validator::types::CapabilitySet,
@@ -30,6 +32,8 @@ use cedar_policy_core::{
     ast::Effect,
     ast::Annotations,
     ast::Expr,
+    ast::ExprBuilder,
+    expr_builder::ExprBuilder as _,
 };
 
 
@@ -38,13 +42,10 @@ use cedar_policy_core::{
 pub struct Validator {
     commands: CommandSet,
     schema: ValidatorSchema,
-    //typecheckerr: Typechecker,
 }
 
 impl Validator {
     pub fn new (commands: CommandSet, schema: ValidatorSchema) -> Self {
-        //let (schema,warnings) = ValidatorSchema::from_cedarschema_str(&std::fs::read_to_string("./crates/strobilus/examples/validator/schema.cedarschema")?,Extensions::none())?;
-
         Self {
             commands,
             schema,
@@ -62,40 +63,37 @@ impl Validator {
         let mut warnings : HashSet<ValidationWarning> = HashSet::new();
 
         let typecheck = Typechecker::new(&self.schema, ValidationMode::Strict); 
+        
+        for request_env in &unlinked_env {
+
+            println!("Validate on allow commands");
+            self.typecheck_com_by_single_env(&*self.commands.on_allow, &request_env, &CapabilitySet::new(),&typecheck);
 
 
-        println!("Validate on allow commands");
-        self.typecheck_com_by_single_env(&*self.commands.on_allow,&typecheck);
-
-
-        println!("Validate on deny commands");
-        self.typecheck_com_by_single_env(&*self.commands.on_deny,&typecheck);
-
+            println!("Validate on deny commands");
+            self.typecheck_com_by_single_env(&*self.commands.on_deny, &request_env, &CapabilitySet::new(),&typecheck);
+        }
 
 
         
         Ok(())
     }
 
-    fn typecheck_com_by_single_env(&self, command: &Command, typecheck: &Typechecker) {
+    fn typecheck_com_by_single_env(&self, command: &Command, request_env: &RequestEnv, prior_capability: &CapabilitySet, typecheck: &Typechecker) {        
         match command.inner_kind() {
              CommandKind::Sequence(c1, c2) => {
                  println!("    sequence command kind");
                 
-                 self.typecheck_com_by_single_env(c2,&typecheck);
-                 self.typecheck_com_by_single_env(c1,&typecheck);
-                 //stack.push(c2);
-                 //stack.push(c1);
+                 self.typecheck_com_by_single_env(c2, &request_env, prior_capability, &typecheck);
+                 self.typecheck_com_by_single_env(c1, &request_env, prior_capability, &typecheck);
              }
 
              CommandKind::IfThenElse(cond, then_cmd, else_cmd) => {
                 println!("    If then else command kind");
                 println!("        {}", cond);
                 
-                self.typecheck_com_by_single_env(then_cmd,&typecheck);
-                self.typecheck_com_by_single_env(else_cmd,&typecheck);
-                //stack.push(then_cmd);
-                //stack.push(else_cmd);
+                self.typecheck_com_by_single_env(then_cmd, &request_env, prior_capability, &typecheck);
+                self.typecheck_com_by_single_env(else_cmd, &request_env, prior_capability, &typecheck);
              }
 
              CommandKind::AddParent(expr_c, expr_p) => {println!("    Add parent command kind");}
@@ -108,9 +106,72 @@ impl Validator {
 
              CommandKind::UpdateAttribute(expr, attr, value_expr) => {
                 println!("    Update attribute command kind : UpdateAttribute( expr, attr, value_expr)");
+            
+                // Single evn typechecker
+                let mut type_errors = Vec::new();
+                let policy_id = PolicyID::from_string("__typecheck_probe__");
+                let single_env_typechecker = SingleEnvTypechecker::new(&self.schema, ValidationMode::Strict, &policy_id, request_env); 
+ 
+                let ans = single_env_typechecker.expect_type(
+                    &prior_capability,
+                    expr,
+                    Type::any_entity_reference(),
+                    &mut type_errors,
+                    |_| None,
+                );
+
+                print!("        Typechecking entity...");
+                match ans.typechecked() {
+                    true => println!("Success"),
+                    false => println!("Fail"),
+                }
+
+                ans.then_typecheck(|typ, cap| 
+                    match typ.data() {
+                        Some(typ_actual) => {
+                            println!("        Entity Success");
+                            //let all_attrs = typ_actual.all_attributes(&self.schema);
+                            let attr_ty = Type::lookup_attribute_type(&self.schema, typ_actual, attr);
+                            /*let annot_expr = ExprBuilder::with_data(
+                                attr_ty
+                                    .as_ref()
+                                    .map(|attr_ty| attr_ty.attr_type.as_ref().clone()),
+                            )
+                            .with_same_source_loc(expr)
+                            .get_attr(typ_expr_actual.clone(), attr.clone());*/
+                            match attr_ty {
+                                Some(ty) => {
+                                    println!("        Attribute Success");
+                                    TypecheckAnswer::success(
+                                        ExprBuilder::with_data(Some(Type::Never))
+                                            .with_same_source_loc(expr)
+                                            .get_attr(typ, attr.clone().into()),
+                                    )
+                                }
+                                None => {
+                                    println!("        Attribute Faild");
+                                    TypecheckAnswer::fail(
+                                        ExprBuilder::new()
+                                            .with_same_source_loc(expr)
+                                            .get_attr(typ, attr.clone().into()),
+                                    )
+                                }
+                            }
+                        }
+                        None => {
+                            println!("        Entity Faild");
+                            TypecheckAnswer::fail(
+                                ExprBuilder::new()
+                                    .with_same_source_loc(expr)
+                                    .get_attr(typ, attr.clone().into()),
+                            )
+                        }
+                    });
+    
+                        
 
 
-                let e1_types = self.infer_expr_type(&typecheck, expr);
+                /*let e1_types = self.infer_expr_type(&typecheck, expr);
 
                 println!("        (expr) \"{}\" : (env,type)",expr);
                 for (i, tipo) in e1_types.iter().enumerate() {
@@ -119,7 +180,7 @@ impl Validator {
                         None    => println!("           ({},tipo non inferito)", i),
                    }
                 }
-                println!("");
+                println!("");*/
 
                 
                 println!("       {}", attr);
