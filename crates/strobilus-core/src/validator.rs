@@ -105,7 +105,7 @@ impl Validator {
              CommandKind::RemoveEntity(expr) => {println!("    Remove entity command kind");}
 
              CommandKind::UpdateAttribute(expr, attr, value_expr) => {
-                println!("    Update attribute command kind : UpdateAttribute( expr, attr, value_expr)");
+                println!("    Validating : UpdateAttribute( {}, {}, {})", expr, attr, value_expr);
             
                 // Single evn typechecker
                 let mut type_errors = Vec::new();
@@ -120,11 +120,11 @@ impl Validator {
                     |_| None,
                 );
 
-                print!("        Typechecking entity...");
+                /*print!("        Typechecking entity...");
                 match ans.typechecked() {
                     true => println!("Success"),
                     false => println!("Fail"),
-                }
+                }*/
 
                 ans.then_typecheck(|typ, cap| 
                     match typ.data() {
@@ -142,6 +142,18 @@ impl Validator {
                             match attr_ty {
                                 Some(ty) => {
                                     println!("        Attribute Success");
+                                    let ans2 = single_env_typechecker.expect_type(
+                                        &prior_capability,
+                                        value_expr,
+                                        ty.attr_type,
+                                        &mut type_errors,
+                                        |_| None,
+                                    );
+                                    match ans2.typechecked() {
+                                        true => println!("        Expression attribute Success"),
+                                        false => println!("        Expression attribute Fail"),
+                                    }
+
                                     TypecheckAnswer::success(
                                         ExprBuilder::with_data(Some(Type::Never))
                                             .with_same_source_loc(expr)
@@ -180,7 +192,7 @@ impl Validator {
                         None    => println!("           ({},tipo non inferito)", i),
                    }
                 }
-                println!("");*/
+                println!("");
 
                 
                 println!("       {}", attr);
@@ -194,7 +206,7 @@ impl Validator {
                         Some(t) => println!("           ({},{})", i, t),
                         None    => println!("           ({},tipo non inferito)", i),
                    }
-                }
+                }*/
                 println!("");
              }
 
