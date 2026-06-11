@@ -252,11 +252,12 @@ fn remove_jusification(es: &mut BasicEntityStore) {
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use crate::entities::store::ReadSetEntityStore;
+use crate::authorizer::print_thread_id;
 
+/// Struct containing the Entity store and related versions hashmap 
 #[derive(Debug, Clone)]
 pub struct InnerInterpreter {
-    entity_store: ReadSetEntityStore,
+    entity_store: BasicEntityStore,
     versions: HashMap<EntityUID, u64>,
 }
 
@@ -266,7 +267,7 @@ impl InnerInterpreter {
         let mut versions = HashMap::new();
         for e in entities.clone().into_iter() {versions.insert(e.uid().clone(), 1);}
         
-        let entity_store = ReadSetEntityStore::new(entities);
+        let entity_store = BasicEntityStore::new(entities);
         
         Self{
             entity_store,
@@ -274,32 +275,31 @@ impl InnerInterpreter {
         }
     }
 
-    pub fn get_read_set(&self) -> HashSet<EntityUID> {
-        self.entity_store.get_read_set()
+    pub fn entity_store(self) -> Entities {
+        self.entity_store.into_entities()
     }
-    
+
+    /// For a specified uid, checks that actual version and old version corresponds
+    fn mismatch(&self, old_versions: &HashMap<EntityUID, u64>, uid: &EntityUID) -> bool {
+        old_versions.get(uid).copied().unwrap_or(0) != self.get_version_value(uid)
+    }
+
+    /// For a specified uid gets the version value from shared interpreter, or 0 if value is not present
+    fn get_version_value(&self, uid: &EntityUID) -> u64 {
+        self.versions.get(uid).copied().unwrap_or(0)
+    }
+
+    /// Extract the whole versions hashmap
     pub fn get_versions(&self) -> HashMap<EntityUID, u64> {
         self.versions.clone()
     }
 
-    pub fn entity_store(&self) -> Entities {
-        self.entity_store.clone().into_entities()
-    }
-
-    fn get_version_value(&self, uid: &EntityUID) -> u64 {
-        self.versions.get(uid).unwrap_or(&0).clone()
-    }
-
-    // For a specified uid, checks that actual version and old version corresponds
-    fn mismatch(&self, old_versions: &HashMap<EntityUID, u64>, uid: &EntityUID) -> bool {
-        old_versions.get(&uid).unwrap().clone() != self.get_version_value(uid)
-    } 
-
-    // Increase version value
+    /// Increase version value for specified uid
     fn increase_version(&mut self, uid: &EntityUID) {
         self.versions.insert(uid.clone(), self.get_version_value(uid) + 1);
     }
 
+    /// Remove version value for specified uid
     fn remove_version(&mut self, uid: &EntityUID) {
         self.versions.remove(uid);
     }
@@ -339,7 +339,7 @@ impl InnerInterpreter {
 }
 
 
-// Enum to identify operations on the store
+// Enum to classify operations on the Entities store
 pub enum StoreOp {
     AddParent {child_uid: EntityUID, parent_uid: EntityUID},
     RemoveParent {child_uid: EntityUID, parent_uid: EntityUID},
@@ -354,7 +354,7 @@ pub enum StoreOp {
     RemoveAttribute {uid: EntityUID, key: SmolStr}
 }
 
-
+/// Struct that contains InnerInterpreter and Obligations
 #[derive(Debug, Clone)]
 pub struct VersionedInterpreter {
     inner: Arc<Mutex<InnerInterpreter>>,
@@ -369,12 +369,15 @@ impl VersionedInterpreter {
         }
     }
 
-    pub fn entity_store(&self) -> Entities {
-        self.inner.lock().unwrap().entity_store.clone().into_entities()
+    /// Extract entities from entities store
+    pub fn entity_store(self) -> Entities {
+        self.inner.lock().unwrap().clone().entity_store()
     }
 
-    pub fn get_interpreter_copy(&self) -> InnerInterpreter {
-        self.inner.lock().unwrap().clone()
+    /// Extracts both a copy of the interpreter and the entities, returning a tuple
+    pub fn get_interpreter_and_entities(&self) -> (InnerInterpreter, Entities) {
+        let inner_interpreter = self.inner.lock().unwrap().clone();
+        (inner_interpreter.clone(), inner_interpreter.entity_store())
     }
 
     // Validates the versions of the Entities contained in the local copy
@@ -384,16 +387,15 @@ impl VersionedInterpreter {
         &self, 
         locked_inner: &mut InnerInterpreter,
         old_versions: &HashMap<EntityUID, u64>, 
+        op_vector: Vec<StoreOp>,
         write_set: HashSet<EntityUID>,
         read_set: HashSet<EntityUID>,
-        op_vector: Vec<StoreOp>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         
         let mut error_flag = false;
     
         // Check every uid in (write_set U read_set)
         for uid in write_set.union(&read_set) {
-            
             // Check mismatch, in case signal error and break loop
             if locked_inner.mismatch(old_versions, &uid) {
                 error_flag = true;
@@ -423,6 +425,7 @@ impl VersionedInterpreter {
         request: &Request,
         result: EvaluationResult,
         mut interpreter_copy: InnerInterpreter,
+        entities: &Entities,
     ) -> Result<(), Box<dyn std::error::Error>> {
         //
 
@@ -430,8 +433,8 @@ impl VersionedInterpreter {
         let mut op_vector: Vec<StoreOp> = Vec::new();
         let old_versions = interpreter_copy.get_versions();
 
-        create_justification_alt(result.clone(), &mut interpreter_copy.entity_store);
-        let entities = interpreter_copy.entity_store.clone().into_entities();
+        create_justification(result.clone(), &mut interpreter_copy.entity_store);
+        // let entities = interpreter_copy.entity_store.clone().into_entities();
         let evaluator = Evaluator::new(request.clone(), &entities, Extensions::none());
         let env = SlotEnv::new();
         
@@ -523,65 +526,16 @@ impl VersionedInterpreter {
         }
 
         //
-        remove_justification_alt(&mut interpreter_copy.entity_store);
+        remove_jusification(&mut interpreter_copy.entity_store);
 
-        let read_set = interpreter_copy.get_read_set();
+        let read_set = entities.read_set();
 
         return {
             // Acquire lock for validating and eventually writing the value
             let mut locked_inner = self.inner.lock().unwrap();
 
             // Validate + write entity_store (if no errors raise during validation)
-            self.validate(&mut locked_inner, &old_versions, write_set, read_set, op_vector)         
-            
+            self.validate(&mut locked_inner, &old_versions, op_vector, write_set, read_set)         
         };
     }
-}
-
-/// Helper to create special Entities "Justification::Permit" and "Justification::Forbid"
-fn create_justification_alt(result: EvaluationResult, es: &mut ReadSetEntityStore) {
-    let mut attributes_permits = BTreeMap::new();
-
-    let satisfied_permits = PartialValue::from(Value::from(result.satisfied_permits));
-    let false_permits = PartialValue::from(Value::from(result.false_permits));
-    attributes_permits.insert(SmolStr::new("satisfied"), satisfied_permits);
-    attributes_permits.insert(SmolStr::new("unsatisfied"), false_permits);
-
-    let uid_permits = EntityUID::from_str("Justification::\"Permits\"")
-        .expect("Error during creation of Justification::\"Permits\" Entity");
-
-    es.update_entity(
-        uid_permits,
-        attributes_permits,
-        HashSet::new(),
-        BTreeMap::new(),
-    );
-
-    let mut attributes_frobids = BTreeMap::new();
-
-    let satisfied_forbids = PartialValue::from(Value::from(result.satisfied_forbids));
-    let false_forbids = PartialValue::from(Value::from(result.false_forbids));
-    attributes_frobids.insert(SmolStr::new("satisfied"), satisfied_forbids);
-    attributes_frobids.insert(SmolStr::new("unsatisfied"), false_forbids);
-
-    let uid_forbids = EntityUID::from_str("Justification::\"Forbids\"")
-        .expect("Error during creation of Justification::\"Forbids\" Entity");
-
-    es.update_entity(
-        uid_forbids,
-        attributes_frobids,
-        HashSet::new(),
-        BTreeMap::new(),
-    );
-}
-
-/// Helper for remove special Entities "Justification::Permit" and "Justification::Forbid"
-fn remove_justification_alt(es: &mut ReadSetEntityStore) {
-    let uid_permits = EntityUID::from_str("Justification::\"Permits\"")
-        .expect("Error during creation of Justification::\"Permits\" Entity");
-    es.remove_entity(&uid_permits);
-
-    let uid_forbids = EntityUID::from_str("Justification::\"Forbids\"")
-        .expect("Error during creation of Justification::\"Forbids\" Entity");
-    es.remove_entity(&uid_forbids);
 }
