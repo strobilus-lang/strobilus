@@ -165,7 +165,8 @@ impl OptimisticAuthorizer {
         }
     }
 
-    pub fn entities(&self) -> Entities {
+    /// Extract entities from entities store
+    pub fn entities(self) -> Entities {
         self.interpreter.entity_store()
     }
 
@@ -174,11 +175,8 @@ impl OptimisticAuthorizer {
         request: &Request,
     ) -> Result<Decision, Box<dyn std::error::Error>> {
         
-        // Do a copy of the whole InnerInterpreter
-        let interpreter_copy = self.interpreter.get_interpreter_copy();
-
-        // Get the entities
-        let entities = interpreter_copy.entity_store();
+        // Do a copy of the whole InnerInterpreter plus the entities
+        let (interpreter_copy, entities) = self.interpreter.get_interpreter_and_entities();
         
         // Evaluate request on the entities
         let result = self.engine.evaluate(request, &entities)?;
@@ -186,9 +184,9 @@ impl OptimisticAuthorizer {
         // Insert a delay before entities store is modified to force race condition
         use std::{time::Duration, thread};
         thread::sleep(Duration::from_millis(200));
-        
+
         // Execute the obligations on the entity store
-        let return_value = match self.interpreter.execute(request, result.clone(), interpreter_copy) {
+        let return_value = match self.interpreter.execute(request, result.clone(), interpreter_copy, &entities) {
             Ok(()) => Ok(result.decision),
             Err(e) => Err(e)
         };
