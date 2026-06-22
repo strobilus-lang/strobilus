@@ -5,7 +5,22 @@
         "parents": []
     },
     {
+        "uid": { "type": "AdminUser", "id": "Root" },
+        "attrs": { "counter": 99 },
+        "parents": [{ "type": "User", "id": "Max" }]
+    },
+    {
         "uid": { "type": "File", "id": "file.docx" },
+        "attrs": {},
+        "parents": []
+    },
+    {
+        "uid": { "type": "PrivateFile", "id": "secret.docx" },
+        "attrs": {},
+        "parents": [{ "type": "File", "id": "file.docx" }]
+    },
+    {
+        "uid": { "type": "Folder", "id": "documents" },
         "attrs": {},
         "parents": []
     }

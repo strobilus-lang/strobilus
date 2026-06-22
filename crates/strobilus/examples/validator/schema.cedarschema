@@ -1,10 +1,24 @@
 entity User {
     counter: Long,
+    nickname?: String,
 };
 
-entity File;
+entity AdminUser in [User];
+
+entity File {
+    name?: String,
+};
+
+entity PrivateFile in [File];
+
+entity Folder;
 
 action read appliesTo {
-    principal: [User],
-    resource:  [File],
+    principal: [User, AdminUser],
+    resource:  [File, PrivateFile, Folder],
+};
+
+action write appliesTo {
+    principal: [AdminUser],
+    resource:  [File, PrivateFile, Folder],
 };

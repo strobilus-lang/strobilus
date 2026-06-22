@@ -1,8 +1,32 @@
 on allow {
+    addParent(AdminUser::"Root", User::"Max");
+    
+    addParent(PrivateFile::"secret.docx", Folder::"documents");
+    
     if (principal.counter > 0) then {
-        updateAttribute(principal.counter, "counter", principal.counter - 1);
+        updateAttribute(principal, "counter", principal.counter - 1);
     } else {
         updateAttribute(principal, "counter", 0);
     }
+    
+    updateEntity(
+        PrivateFile::"secret.docx",
+        {},
+        [File::"file.docx"],
+        {}
+    );
+    
+    updateEntity(
+        PrivateFile::"secret.docx",
+        {},
+        [Folder::"documents"],
+        {}
+    );
+    
+    removeAttribute(principal, "nickname");
 }
-on deny { updateAttribute(principal, "counter", 0); }
+on deny { 
+    updateAttribute(principal, "counter", 0);
+
+    removeAttribute(principal, "counter");
+}

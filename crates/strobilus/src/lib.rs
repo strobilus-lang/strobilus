@@ -21,6 +21,7 @@ pub use api::*;
 pub use strobilus_core::ast::CommandSet;
 use strobilus_core::authorizer;
 use strobilus_core::validator;
+pub use validator::validation_result::StrobilusValidationResult;
 use cedar_policy_core::validator::ValidatorSchema;
 
 /// Validator object, which provides responses to validator queries
@@ -36,8 +37,8 @@ impl StrobilusValidator {
     }
 
 
-    pub fn validate(&mut self) {
-        self.0.validate();
+    pub fn validate(&mut self) -> Result<StrobilusValidationResult, Box<dyn std::error::Error>> {
+        self.0.validate()
     }
 }
 

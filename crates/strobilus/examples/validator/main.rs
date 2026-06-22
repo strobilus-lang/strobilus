@@ -10,7 +10,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //let mut val = StrobilusValidator::new(policies,obligations,entities);
     let mut val = StrobilusValidator::new(obligations,schema);
-    val.validate();
+
+    match val.validate() {
+        Ok(result) => result.print(),
+        Err(e)     => println!("Errore durante la validazione: {}", e),
+    }
 
     Ok(())
 }
