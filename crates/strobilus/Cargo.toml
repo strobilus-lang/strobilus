@@ -18,6 +18,7 @@ dhat = { version = "0.3.2", optional = true }
 serde_with = "3.13.0"
 nonempty = "0.10"
 prost = { version = "0.13", optional = true }
+rand = "0.8"
 
 # wasm dependencies
 serde-wasm-bindgen = { version = "0.6", optional = true }

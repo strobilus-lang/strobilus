@@ -16,6 +16,8 @@
  */
 
 mod api;
+use std::time::Duration;
+
 pub use api::*;
 
 pub use strobilus_core::ast::CommandSet;
@@ -86,6 +88,9 @@ pub fn parse_obligations_file(path: &str) -> Result<CommandSet, Box<dyn std::err
 
 // ---------------------------------- OPTIMISTIC WRAPPER IMPLEMENTATION ----------------------------------
 
+use std::thread;
+use rand::Rng;
+
 pub struct OptimisticWrapper (authorizer::OptimisticAuthorizer);
 
 impl OptimisticWrapper {
@@ -116,27 +121,67 @@ impl OptimisticWrapper {
         Self(self.0.clone())
     }
 
-    // Call internal is_authorized, retries 3 times in case of internal error, then returns Deny
-    pub fn is_authorized(&mut self, request: Request) -> Decision {
+    // // Call internal is_authorized, retries 3 times in case of internal error, then returns Deny
+    // pub fn is_authorized(&mut self, request: Request) -> Decision {
+    //     let mut return_value = Decision::Deny;
+    //     let mut retry_flag = true;
+    //     let mut attempt_count = 3;
+
+    //     while (retry_flag == true) && (attempt_count > 0) {
+    //         retry_flag = false;
+    //         return_value = match self.0.is_authorized(&request.0) {
+    //             Ok(decision) => decision,
+    //             Err(_) => {
+    //                 print_thread_id("RETRY");
+    //                 retry_flag = true;
+    //                 attempt_count -= 1;
+    //                 Decision::Deny
+    //             },
+    //         };
+    //     }
+
+    //     return_value
+    // }
+
+    pub fn is_authorized(&mut self, request: Request) -> Decision { 
+        let base_delay: f64 = 10.0;
+        let max_delay: f64 = 1000.0;
+        let mut attempt: i32 = 1;
+        let max_attempt: i32 = 10;
+        
         let mut return_value = Decision::Deny;
         let mut retry_flag = true;
-        let mut attempt_count = 3;
-
-        while (retry_flag == true) && (attempt_count > 0) {
+        
+        while retry_flag && (attempt <= max_attempt) {
             retry_flag = false;
-            return_value = match self.0.is_authorized(&request.0) {
-                Ok(decision) => decision,
+            return_value = match self.0.is_authorized(&request.0){
+                Ok(decision) => decision, 
                 Err(_) => {
                     print_thread_id("RETRY");
                     retry_flag = true;
-                    attempt_count -= 1;
                     Decision::Deny
-                },
+                }
             };
+
+            if retry_flag {
+                thread::sleep(Self::calculate_delay(base_delay, max_delay, attempt));
+                attempt += 1;
+            }
         }
 
         return_value
     }
+
+    fn calculate_delay(base_delay: f64, max_delay: f64, attempt: i32) -> Duration {
+        let mut rng = rand::thread_rng();
+        let exp_delay = base_delay * (2_f64.powi(attempt as i32));
+        let cap_delay = exp_delay.min(max_delay);
+        let delay = rng.gen_range(0.0..=cap_delay).round() as u64;
+        print_thread_id(&format!("Slept for {:?} millis after attempt {}", delay, attempt));
+        print_thread_id(&format!("exp_delay: {:?}, cap_delay: {:?}", exp_delay, cap_delay));
+        Duration::from_millis(delay)
+    }
+
 }
 
 pub fn print_thread_id(string: &str) {
