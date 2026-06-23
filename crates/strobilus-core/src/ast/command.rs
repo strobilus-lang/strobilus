@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-use cedar_policy_core::ast::Expr;
+use std::sync::Arc;
+
+use cedar_policy_core::{ast::Expr, parser::Loc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandKind<T = ()> {
@@ -32,6 +34,7 @@ pub enum CommandKind<T = ()> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command<T = ()> {
     pub kind: CommandKind<T>,
+    pub loc: Loc
 }
 
 impl<T> Command<T> {
@@ -49,8 +52,8 @@ pub struct CommandSet<T = ()> {
 impl<T> CommandSet<T> {
     pub fn new() -> Self {
         Self {
-            on_allow: Box::new(Command { kind: CommandKind::Skip }),
-            on_deny: Box::new(Command { kind: CommandKind::Skip }),
+            on_allow: Box::new(Command { kind: CommandKind::Skip, loc: Loc::new(0..0, Arc::from("")) }),
+            on_deny: Box::new(Command { kind: CommandKind::Skip, loc: Loc::new(0..0, Arc::from("")) }),
         }
     }
 }

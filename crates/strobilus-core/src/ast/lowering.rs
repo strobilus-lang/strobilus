@@ -36,9 +36,11 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
     match command.node.expect("Error parsing command") {
         CstCommand::AddParent(expr1, expr2) => Ok(AstCommand {
             kind: CommandKind::AddParent(expr1.to_ast_expr()?, expr2.to_ast_expr()?),
+            loc: command.loc
         }),
         CstCommand::RemoveParent(expr1, expr2) => Ok(AstCommand {
             kind: CommandKind::RemoveParent(expr1.to_ast_expr()?, expr2.to_ast_expr()?),
+            loc: command.loc
         }),
         CstCommand::UpdateEntity(uid, attributes, ancestors, tags) => {
             Ok(AstCommand {
@@ -48,11 +50,13 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
                     ancestors.to_ast_expr()?,
                     tags.to_ast_expr()?,
                 ),
+                loc: command.loc
             })
         },
         CstCommand::RemoveEntity(uid) => {
             Ok(AstCommand {
                 kind: CommandKind::RemoveEntity(uid.to_ast_expr()?),
+                loc: command.loc
             })
         },
         CstCommand::UpdateAttribute(expr1, attr, expr2) => {
@@ -68,6 +72,7 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
                     //attr.to_string(),
                     expr2.to_ast_expr()?,
                 ),
+                loc: command.loc
             })
         }
         CstCommand::RemoveAttribute(expr1, attr) => {
@@ -80,6 +85,7 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
                         _attr[1.._attr.len() - 1].to_owned()
                     },
                 ),
+                loc: command.loc
             })
         }
         CstCommand::Sequence(c1, c2) => Ok(AstCommand {
@@ -87,6 +93,7 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
                 Box::new(lower_command(*c1)?),
                 Box::new(lower_command(*c2)?),
             ),
+            loc: command.loc
         }),
         CstCommand::IfThenElse(condition, c1, c2) => Ok(AstCommand {
             kind: CommandKind::IfThenElse(
@@ -94,9 +101,11 @@ fn lower_command(command: Node<CstCommand>) -> Result<AstCommand<()>, Box<dyn st
                 Box::new(lower_command(*c1)?),
                 Box::new(lower_command(*c2)?),
             ),
+            loc: command.loc
         }),
         CstCommand::Skip => Ok(AstCommand {
             kind: CommandKind::Skip,
+            loc: command.loc
         }),
     }
 }

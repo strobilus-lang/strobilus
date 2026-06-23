@@ -1,32 +1,20 @@
-
-use std::str::FromStr;
 use std::collections::HashSet;
+use std::str::FromStr;
 
-use crate::ast::{command::CommandKind, CommandSet, Command};
+use crate::ast::{command::CommandKind, Command, CommandSet};
 pub mod validation_result;
-use validation_result::{StrobilusTypeError, StrobilusTypeWarning, StrobilusValidationResult};
 use smol_str::SmolStr;
+use validation_result::{StrobilusTypeError, StrobilusTypeWarning, StrobilusValidationResult};
 
 use cedar_policy_core::{
-    validator::ValidatorSchema, 
-    validator::typecheck::SingleEnvTypechecker, 
-    validator::typecheck::typecheck_answer::TypecheckAnswer, 
-    validator::ValidationMode, 
-    validator::types::Capability, 
-    validator::types::CapabilitySet,
-    validator::types::Type, 
-    validator::types::EntityRecordKind, 
-    validator::types::EntityLUB, 
-    validator::types::RequestEnv,
-    validator::types::OpenTag, 
-    validator::types::Attributes,
-    validator::ValidatorEntityType,
-    ast::EntityType, 
-    ast::ExprKind, 
-    ast::PolicyID, 
+    ast::EntityType, ast::ExprKind, ast::PolicyID,
+    validator::typecheck::typecheck_answer::TypecheckAnswer,
+    validator::typecheck::SingleEnvTypechecker, validator::types::Attributes,
+    validator::types::Capability, validator::types::CapabilitySet, validator::types::EntityLUB,
+    validator::types::EntityRecordKind, validator::types::OpenTag, validator::types::RequestEnv,
+    validator::types::Type, validator::ValidationMode, validator::ValidatorEntityType,
+    validator::ValidatorSchema,
 };
-
-
 
 #[derive(Debug, Clone)]
 pub struct Validator {
@@ -36,15 +24,13 @@ pub struct Validator {
 
 impl Validator {
     pub fn new(commands: CommandSet, schema: ValidatorSchema) -> Self {
-        Self {
-            commands,
-            schema,
-        }
+        Self { commands, schema }
     }
 
     pub fn validate(&mut self) -> StrobilusValidationResult {
         // Build all request environments from the schema
-        let unlinked_env: Vec<RequestEnv> = self.schema
+        let unlinked_env: Vec<RequestEnv> = self
+            .schema
             .unlinked_request_envs(ValidationMode::Strict)
             .collect();
 
@@ -77,21 +63,18 @@ impl Validator {
 
     fn typecheck_com_by_single_env<'a>(
         &'a self,
-        command:          &'a Command,
-        request_env:      &'a RequestEnv<'a>,
+        command: &'a Command,
+        request_env: &'a RequestEnv<'a>,
         prior_capability: &CapabilitySet<'a>,
-        policy_id:        &'a PolicyID,
-        result:           &mut StrobilusValidationResult,
+        policy_id: &'a PolicyID,
+        result: &mut StrobilusValidationResult,
     ) -> CapabilitySet<'a> {
-
         let tc = Self::make_single_env_tc(&self.schema, request_env, policy_id);
 
+        let loc = normalized_loc(&command);
         match command.inner_kind() {
-
             // (TypeSkip) — always valid, α' = α unchanged
-            CommandKind::Skip => {
-                prior_capability.clone()
-            }
+            CommandKind::Skip => prior_capability.clone(),
 
             // (TypeSequence)
             // α; Γ ⊢ₛ c1 : *; α1     α1; Γ ⊢ₛ c2 : *; α2
@@ -100,7 +83,13 @@ impl Validator {
             //
             // The output capabilities of c1 become the input capabilities of c2.
             CommandKind::Sequence(c1, c2) => {
-                let alpha1 = self.typecheck_com_by_single_env(c1, request_env, prior_capability, policy_id, result);
+                let alpha1 = self.typecheck_com_by_single_env(
+                    c1,
+                    request_env,
+                    prior_capability,
+                    policy_id,
+                    result,
+                );
                 self.typecheck_com_by_single_env(c2, request_env, &alpha1, policy_id, result)
             }
 
@@ -108,13 +97,15 @@ impl Validator {
             // (TypeIfC2) cond : False → typecheck only else with α, skip then
             // (TypeIfC3) cond : Bool  → typecheck both branches, α' = α1 ∩ α2
             CommandKind::IfThenElse(cond, then_cmd, else_cmd) => {
-
                 // α; Γ ⊢ cond : Bool
-                let ans_cond = Self::typecheck_expr(&tc, prior_capability, cond, Type::primitive_boolean());
+                let ans_cond =
+                    Self::typecheck_expr(&tc, prior_capability, cond, Type::primitive_boolean());
 
                 // ε = capabilities produced by the condition expression
                 let epsilon = match &ans_cond {
-                    TypecheckAnswer::TypecheckSuccess { expr_capability, .. } => expr_capability.clone(),
+                    TypecheckAnswer::TypecheckSuccess {
+                        expr_capability, ..
+                    } => expr_capability.clone(),
                     _ => CapabilitySet::new(),
                 };
 
@@ -122,35 +113,65 @@ impl Validator {
                 let alpha_union_epsilon = prior_capability.union(&epsilon);
 
                 match Self::get_expr_type(&ans_cond) {
-
                     // TypeIfC1: α' = α1 (only then branch with α ∪ ε)
                     Some(Type::True) => {
-                        result.warnings.insert(StrobilusTypeWarning::ConditionAlwaysTrue {
-                            expr: cond.to_string(),
-                        });
-                        self.typecheck_com_by_single_env(then_cmd, request_env, &alpha_union_epsilon, policy_id, result)
+                        result
+                            .warnings
+                            .insert(StrobilusTypeWarning::ConditionAlwaysTrue {
+                                expr: cond.to_string(),
+                            });
+                        self.typecheck_com_by_single_env(
+                            then_cmd,
+                            request_env,
+                            &alpha_union_epsilon,
+                            policy_id,
+                            result,
+                        )
                     }
 
                     // TypeIfC2: α' = α1 (only else branch with α)
                     Some(Type::False) => {
-                        result.warnings.insert(StrobilusTypeWarning::ConditionAlwaysFalse {
-                            expr: cond.to_string(),
-                        });
-                        self.typecheck_com_by_single_env(else_cmd, request_env, prior_capability, policy_id, result)
+                        result
+                            .warnings
+                            .insert(StrobilusTypeWarning::ConditionAlwaysFalse {
+                                expr: cond.to_string(),
+                            });
+                        self.typecheck_com_by_single_env(
+                            else_cmd,
+                            request_env,
+                            prior_capability,
+                            policy_id,
+                            result,
+                        )
                     }
 
                     // TypeIfC3: α' = α1 ∩ α2
                     Some(_) => {
-                        let alpha1 = self.typecheck_com_by_single_env(then_cmd, request_env, &alpha_union_epsilon, policy_id, result);
-                        let alpha2 = self.typecheck_com_by_single_env(else_cmd, request_env, prior_capability, policy_id, result);
+                        let alpha1 = self.typecheck_com_by_single_env(
+                            then_cmd,
+                            request_env,
+                            &alpha_union_epsilon,
+                            policy_id,
+                            result,
+                        );
+                        let alpha2 = self.typecheck_com_by_single_env(
+                            else_cmd,
+                            request_env,
+                            prior_capability,
+                            policy_id,
+                            result,
+                        );
                         alpha1.intersect(&alpha2)
                     }
 
                     // Non-boolean condition — error, α' = α unchanged
                     None => {
-                        result.errors.insert(StrobilusTypeError::NonBooleanCondition {
-                            expr: cond.to_string(),
-                        });
+                        result
+                            .errors
+                            .insert(StrobilusTypeError::NonBooleanCondition {
+                                expr: cond.to_string(),
+                                loc: loc.clone(),
+                            });
                         prior_capability.clone()
                     }
                 }
@@ -161,30 +182,38 @@ impl Validator {
             // ───────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ addParent(e1, e2) : *; filtp(α)
             //
-            // Lean reference 
+            // Lean reference
             // typeOfAddParent (uid : Expr) (parentUid : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::AddParent(e1, e2) => {
-                let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
-                let ans_e2 = Self::typecheck_expr(&tc, prior_capability, e2, Type::any_entity_reference());
+                let ans_e1 =
+                    Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
+                let ans_e2 =
+                    Self::typecheck_expr(&tc, prior_capability, e2, Type::any_entity_reference());
 
-                match (Self::extract_entity_type(&ans_e1), Self::extract_entity_type(&ans_e2)) {
+                match (
+                    Self::extract_entity_type(&ans_e1),
+                    Self::extract_entity_type(&ans_e2),
+                ) {
                     (Some(E1), Some(E2)) => {
                         // M(E1) = (_, H1), check E2 ∈ H1
                         if !Self::is_valid_parent(&self.schema, E1, E2) {
                             result.errors.insert(StrobilusTypeError::InvalidParentType {
-                                child_type:  E1.to_string(),
+                                child_type: E1.to_string(),
                                 parent_type: E2.to_string(),
+                                loc: loc.clone(),
                             });
                         }
                     }
                     (None, _) => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e1.to_string(),
+                            loc: loc.clone(),
                         });
                     }
                     (_, None) => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e2.to_string(),
+                            loc: loc.clone(),
                         });
                     }
                 }
@@ -197,30 +226,38 @@ impl Validator {
             // ───────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ removeParent(e1, e2) : *; filtp(α)
             //
-            // Lean reference 
-            // typeOfRemoveParent (uid : Expr) (parentUid : Expr) (env : TypeEnv) (α : Capabilities) 
+            // Lean reference
+            // typeOfRemoveParent (uid : Expr) (parentUid : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::RemoveParent(e1, e2) => {
-                let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
-                let ans_e2 = Self::typecheck_expr(&tc, prior_capability, e2, Type::any_entity_reference());
+                let ans_e1 =
+                    Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
+                let ans_e2 =
+                    Self::typecheck_expr(&tc, prior_capability, e2, Type::any_entity_reference());
 
-                match (Self::extract_entity_type(&ans_e1), Self::extract_entity_type(&ans_e2)) {
+                match (
+                    Self::extract_entity_type(&ans_e1),
+                    Self::extract_entity_type(&ans_e2),
+                ) {
                     (Some(E1), Some(E2)) => {
                         // M(E1) = (_, H1), check E2 ∈ H1
                         if !Self::is_valid_parent(&self.schema, E1, E2) {
                             result.errors.insert(StrobilusTypeError::InvalidParentType {
-                                child_type:  E1.to_string(),
+                                child_type: E1.to_string(),
                                 parent_type: E2.to_string(),
+                                loc: loc.clone(),
                             });
                         }
                     }
                     (None, _) => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e1.to_string(),
+                            loc: loc.clone(),
                         });
                     }
                     (_, None) => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e2.to_string(),
+                            loc: loc.clone(),
                         });
                     }
                 }
@@ -233,15 +270,17 @@ impl Validator {
             // ─────────────────────────────────────────────
             // α; Γ ⊢ₛ removeEntity(e) : *; filtt(E, α)
             //
-            // Lean reference 
+            // Lean reference
             // typeOfRemoveEntity (uid : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::RemoveEntity(e) => {
-                let ans_e = Self::typecheck_expr(&tc, prior_capability, e, Type::any_entity_reference());
+                let ans_e =
+                    Self::typecheck_expr(&tc, prior_capability, e, Type::any_entity_reference());
 
                 match Self::extract_entity_type(&ans_e) {
                     None => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e.to_string(),
+                            loc: loc.clone(),
                         });
                         // α' = α unchanged on error
                         prior_capability.clone()
@@ -256,15 +295,17 @@ impl Validator {
             // ────────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ updateAttribute(e1, f, e2) : *; filta(f, α ∪ {(e1, f)})
             //
-            // Lean reference 
+            // Lean reference
             // typeOfUpdateAttribute (uid : Expr) (attr : Attr) (newValue : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::UpdateAttribute(e1, f, e2) => {
-                let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
+                let ans_e1 =
+                    Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
 
                 match Self::extract_entity_type(&ans_e1) {
                     None => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e1.to_string(),
+                            loc: loc.clone(),
                         });
                         prior_capability.clone()
                     }
@@ -274,25 +315,33 @@ impl Validator {
                             None => {
                                 result.errors.insert(StrobilusTypeError::UnknownAttribute {
                                     entity_type: E.to_string(),
-                                    attr:        f.to_string(),
-                                    expr:        e1.to_string(),
+                                    attr: f.to_string(),
+                                    expr: e1.to_string(),
+                                    loc: loc.clone(),
                                 });
                                 prior_capability.clone()
                             }
                             Some(attr_info) => {
                                 // α; Γ ⊢ e2 : τ
                                 let ans_e2 = Self::typecheck_expr(
-                                    &tc, prior_capability, e2, attr_info.attr_type.clone(),
+                                    &tc,
+                                    prior_capability,
+                                    e2,
+                                    attr_info.attr_type.clone(),
                                 );
                                 if !ans_e2.typechecked() {
-                                    result.errors.insert(StrobilusTypeError::IncompatibleAttributeType {
-                                        entity_type: E.to_string(),
-                                        attr:        f.to_string(),
-                                        value_expr:  e2.to_string(),
-                                    });
+                                    result.errors.insert(
+                                        StrobilusTypeError::IncompatibleAttributeType {
+                                            entity_type: E.to_string(),
+                                            attr: f.to_string(),
+                                            value_expr: e2.to_string(),
+                                            loc: loc.clone(),
+                                        },
+                                    );
                                 }
                                 // α' = filta(f, α ∪ {(e1, f)})
-                                let new_cap = Capability::new_attribute(e1, SmolStr::new(f.as_str()));
+                                let new_cap =
+                                    Capability::new_attribute(e1, SmolStr::new(f.as_str()));
                                 prior_capability
                                     .union(&CapabilitySet::singleton(new_cap))
                                     .filta(f)
@@ -307,15 +356,17 @@ impl Validator {
             // ────────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ removeAttribute(e, f) : *; filta(f, α∖{(e', f) | e' ∈ Expr})
             //
-            // Lean reference 
+            // Lean reference
             // typeOfUpdateAttribute (uid : Expr) (attr : Attr) (newValue : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::RemoveAttribute(e, f) => {
-                let ans_e = Self::typecheck_expr(&tc, prior_capability, e, Type::any_entity_reference());
+                let ans_e =
+                    Self::typecheck_expr(&tc, prior_capability, e, Type::any_entity_reference());
 
                 match Self::extract_entity_type(&ans_e) {
                     None => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e.to_string(),
+                            loc: loc.clone(),
                         });
                         prior_capability.clone()
                     }
@@ -325,17 +376,21 @@ impl Validator {
                             None => {
                                 result.errors.insert(StrobilusTypeError::UnknownAttribute {
                                     entity_type: E.to_string(),
-                                    attr:        f.to_string(),
-                                    expr:        e.to_string(),
+                                    attr: f.to_string(),
+                                    expr: e.to_string(),
+                                    loc: loc.clone(),
                                 });
                                 prior_capability.clone()
                             }
                             // f must be optional (?f) — required attributes cannot be removed
                             Some(attr_info) if attr_info.is_required => {
-                                result.errors.insert(StrobilusTypeError::CannotRemoveRequiredAttribute {
-                                    entity_type: E.to_string(),
-                                    attr:        f.to_string(),
-                                });
+                                result.errors.insert(
+                                    StrobilusTypeError::CannotRemoveRequiredAttribute {
+                                        entity_type: E.to_string(),
+                                        attr: f.to_string(),
+                                        loc: loc.clone(),
+                                    },
+                                );
                                 prior_capability.clone()
                             }
                             // α' = filta(f, α)
@@ -350,15 +405,17 @@ impl Validator {
             // ────────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ updateEntity(e1, e2, [E1::s1,...,En::sn]) : *; filtt(E, α)
             //
-            // Lean reference 
+            // Lean reference
             // typeOfUpdateEntity (uid : Expr) (attrs : Expr) (ancestors : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::UpdateEntity(e1, e2, anc_e, tags_e) => {
-                let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
+                let ans_e1 =
+                    Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
 
                 match Self::extract_entity_type(&ans_e1) {
                     None => {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e1.to_string(),
+                            loc: loc.clone(),
                         });
                         prior_capability.clone()
                     }
@@ -367,44 +424,58 @@ impl Validator {
                             None => {
                                 result.errors.insert(StrobilusTypeError::UnknownEntityType {
                                     entity_type: E.to_string(),
-                                    expr:        e1.to_string(),
+                                    expr: e1.to_string(),
+                                    loc: loc.clone(),
                                 });
                                 prior_capability.clone()
                             }
                             Some(entity_info) => {
-
                                 // α; Γ ⊢ e2 : A, where A is the record type of E in the schema
                                 let type_A = Type::EntityOrRecord(EntityRecordKind::Record {
-                                    attrs:           entity_info.attributes().clone(),
+                                    attrs: entity_info.attributes().clone(),
                                     open_attributes: OpenTag::ClosedAttributes,
                                 });
-                                let ans_e2 = Self::typecheck_expr(&tc, prior_capability, e2, type_A);
+                                let ans_e2 =
+                                    Self::typecheck_expr(&tc, prior_capability, e2, type_A);
                                 if !ans_e2.typechecked() {
-                                    result.errors.insert(StrobilusTypeError::IncompatibleAttributeType {
-                                        entity_type: E.to_string(),
-                                        attr:        "(record)".to_string(),
-                                        value_expr:  e2.to_string(),
-                                    });
+                                    result.errors.insert(
+                                        StrobilusTypeError::IncompatibleAttributeType {
+                                            entity_type: E.to_string(),
+                                            attr: "(record)".to_string(),
+                                            value_expr: e2.to_string(),
+                                            loc: loc.clone(),
+                                        },
+                                    );
                                 }
 
                                 // {E1,...,En} ⊆ H — verify each ancestor in the list
                                 if let ExprKind::Set(elements) = anc_e.expr_kind() {
                                     for element in elements.iter() {
                                         let ans_elem = Self::typecheck_expr(
-                                            &tc, prior_capability, element,
+                                            &tc,
+                                            prior_capability,
+                                            element,
                                             Type::any_entity_reference(),
                                         );
                                         match Self::extract_entity_type(&ans_elem) {
                                             None => {
-                                                result.errors.insert(StrobilusTypeError::ExpectedEntity {
-                                                    expr: element.to_string(),
-                                                });
+                                                result.errors.insert(
+                                                    StrobilusTypeError::ExpectedEntity {
+                                                        expr: element.to_string(),
+                                                        loc: loc.clone(),
+                                                    },
+                                                );
                                             }
-                                            Some(Ei) if !Self::is_valid_parent(&self.schema, E, Ei) => {
-                                                result.errors.insert(StrobilusTypeError::InvalidParentType {
-                                                    child_type:  E.to_string(),
-                                                    parent_type: Ei.to_string(),
-                                                });
+                                            Some(Ei)
+                                                if !Self::is_valid_parent(&self.schema, E, Ei) =>
+                                            {
+                                                result.errors.insert(
+                                                    StrobilusTypeError::InvalidParentType {
+                                                        child_type: E.to_string(),
+                                                        parent_type: Ei.to_string(),
+                                                        loc: loc.clone(),
+                                                    },
+                                                );
                                             }
                                             Some(_) => {}
                                         }
@@ -413,13 +484,15 @@ impl Validator {
 
                                 // tags_e — open record, accepts any record including empty
                                 let type_tags = Type::EntityOrRecord(EntityRecordKind::Record {
-                                    attrs:           Attributes::with_required_attributes(std::iter::empty()),
+                                    attrs: Attributes::with_required_attributes(std::iter::empty()),
                                     open_attributes: OpenTag::OpenAttributes,
                                 });
-                                let ans_tags = Self::typecheck_expr(&tc, prior_capability, tags_e, type_tags);
+                                let ans_tags =
+                                    Self::typecheck_expr(&tc, prior_capability, tags_e, type_tags);
                                 if !ans_tags.typechecked() {
                                     result.errors.insert(StrobilusTypeError::ExpectedEntity {
                                         expr: tags_e.to_string(),
+                                        loc: loc.clone(),
                                     });
                                 }
 
@@ -460,7 +533,9 @@ impl Validator {
     fn get_expr_type<'a>(ans: &'a TypecheckAnswer<'a>) -> Option<&'a Type> {
         match ans {
             TypecheckAnswer::TypecheckSuccess { expr_type, .. } => expr_type.data().as_ref(),
-            TypecheckAnswer::TypecheckFail { expr_recovery_type } => expr_recovery_type.data().as_ref(),
+            TypecheckAnswer::TypecheckFail { expr_recovery_type } => {
+                expr_recovery_type.data().as_ref()
+            }
             TypecheckAnswer::RecursionLimit => None,
         }
     }
@@ -493,5 +568,46 @@ impl Validator {
         entity_type: &EntityType,
     ) -> Option<&'a ValidatorEntityType> {
         schema.get_entity_type(entity_type)
-    }Change language of a few comment and remove unnecessary code
+    }
+}
+
+fn normalized_loc(command: &Command) -> String {
+    let offset = command.loc.span.offset();
+    let prefix = &command.loc.src[..offset];
+
+    let start_col = prefix
+        .rsplit('\n')
+        .next()
+        .map(|s| s.chars().count())
+        .unwrap_or(0);
+
+    let line = prefix.bytes().filter(|&b| b == b'\n').count() + 1;
+    let col = start_col + 1;
+
+    let snippet = command
+        .loc
+        .snippet()
+        .unwrap_or("")
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            if i == 0 {
+                line
+            } else {
+                let remove = line
+                    .chars()
+                    .take_while(|c| *c == ' ')
+                    .count()
+                    .min(start_col);
+
+                line.char_indices()
+                    .nth(remove)
+                    .map(|(idx, _)| &line[idx..])
+                    .unwrap_or("")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!("[line {line} col {col}]\n{snippet}")
 }

@@ -1,63 +1,65 @@
-use cedar_policy_core::ast::{EntityType, Expr, Name};
+use cedar_policy_core::{
+    ast::{EntityType, Expr, Name},
+    parser::Loc,
+};
 use smol_str::SmolStr;
-use thiserror::Error;
 use std::collections::HashSet;
-
+use thiserror::Error;
 
 #[derive(Debug, Error, Clone, Hash, Eq, PartialEq)]
 pub enum StrobilusTypeError {
-
-    #[error("expected an entity, but expression `{expr}` has a different type")]
+    #[error("\n{loc}\nexpected an entity, but expression `{expr}` has a different type")]
     ExpectedEntity {
         expr: String,   
+        loc: String,
     },
 
-    #[error("entity type `{entity_type}` is not declared in the schema")]
+    #[error("\n{loc}\nentity type `{entity_type}` is not declared in the schema")]
     UnknownEntityType {
         entity_type: String,
-        expr:        String,
+        expr: String,
+        loc: String,
     },
 
-    #[error("attribute `{attr}` does not exist on entity type `{entity_type}`")]
+    #[error("\n{loc}\nattribute `{attr}` does not exist on entity type `{entity_type}`")]
     UnknownAttribute {
         entity_type: String,
-        attr:        String,
-        expr:        String,
+        attr: String,
+        expr: String,
+        loc: String,
     },
 
-    #[error("value type is not compatible with attribute `{attr}` on entity type `{entity_type}`")]
+    #[error("\n{loc}\nvalue type is not compatible with attribute `{attr}` on entity type `{entity_type}`")]
     IncompatibleAttributeType {
         entity_type: String,
-        attr:        String,
-        value_expr:  String,
+        attr: String,
+        value_expr: String,
+        loc: String,
     },
 
-    #[error("cannot remove required attribute `{attr}` from entity type `{entity_type}`")]
+    #[error("\n{loc}\ncannot remove required attribute `{attr}` from entity type `{entity_type}`")]
     CannotRemoveRequiredAttribute {
         entity_type: String,
-        attr:        String,
+        attr: String,
+        loc: String,
     },
 
-    #[error("`{parent_type}` is not a valid parent type for `{child_type}`")]
+    #[error("\n{loc}\n`{parent_type}` is not a valid parent type for `{child_type}`")]
     InvalidParentType {
-        child_type:  String,
+        child_type: String,
         parent_type: String,
+        loc: String,
     },
 
-    #[error("condition in if-then-else must be boolean")]
-    NonBooleanCondition {
-        expr: String,
-    },
+    #[error("\n{loc}\ncondition in if-then-else must be boolean")]
+    NonBooleanCondition { expr: String, loc: String },
 
-    #[error("recursion limit reached while typechecking expression `{expr}`")]
-    RecursionLimit {
-        expr: String,
-    },
+    #[error("\n{loc}\nrecursion limit reached while typechecking expression `{expr}`")]
+    RecursionLimit { expr: String, loc: String },
 }
 
 #[derive(Debug, Error, Clone, Hash, Eq, PartialEq)]
 pub enum StrobilusTypeWarning {
-
     #[error("condition `{expr}` is always true, else branch will never execute")]
     ConditionAlwaysTrue { expr: String },
 
@@ -67,14 +69,14 @@ pub enum StrobilusTypeWarning {
 
 #[derive(Debug)]
 pub struct StrobilusValidationResult {
-    pub errors:   HashSet<StrobilusTypeError>,
+    pub errors: HashSet<StrobilusTypeError>,
     pub warnings: HashSet<StrobilusTypeWarning>,
 }
 
 impl StrobilusValidationResult {
     pub fn new() -> Self {
         Self {
-            errors:   HashSet::new(),
+            errors: HashSet::new(),
             warnings: HashSet::new(),
         }
     }
@@ -92,14 +94,14 @@ impl StrobilusValidationResult {
         if !self.errors.is_empty() {
             println!("Errors ({})", self.errors.len());
             for error in &self.errors {
-                println!("     {}", error);
+                println!("{}", error);
             }
         }
 
         if !self.warnings.is_empty() {
-            println!("Warning ({})", self.warnings.len());
+            println!("Warning ({}):", self.warnings.len());
             for warning in &self.warnings {
-                println!("     {}", warning);
+                println!("{}", warning);
             }
         }
     }
