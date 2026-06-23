@@ -160,6 +160,9 @@ impl Validator {
             // α; Γ ⊢ e1 : E1     α; Γ ⊢ e2 : E2     M(E1) = (_, H1)     E2 ∈ H1
             // ───────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ addParent(e1, e2) : *; filtp(α)
+            //
+            // Lean reference 
+            // typeOfAddParent (uid : Expr) (parentUid : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::AddParent(e1, e2) => {
                 let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
                 let ans_e2 = Self::typecheck_expr(&tc, prior_capability, e2, Type::any_entity_reference());
@@ -193,6 +196,9 @@ impl Validator {
             // α; Γ ⊢ e1 : E1     α; Γ ⊢ e2 : E2     M(E1) = (_, H1)     E2 ∈ H1
             // ───────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ removeParent(e1, e2) : *; filtp(α)
+            //
+            // Lean reference 
+            // typeOfRemoveParent (uid : Expr) (parentUid : Expr) (env : TypeEnv) (α : Capabilities) 
             CommandKind::RemoveParent(e1, e2) => {
                 let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
                 let ans_e2 = Self::typecheck_expr(&tc, prior_capability, e2, Type::any_entity_reference());
@@ -226,6 +232,9 @@ impl Validator {
             // α; Γ ⊢ e : E
             // ─────────────────────────────────────────────
             // α; Γ ⊢ₛ removeEntity(e) : *; filtt(E, α)
+            //
+            // Lean reference 
+            // typeOfRemoveEntity (uid : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::RemoveEntity(e) => {
                 let ans_e = Self::typecheck_expr(&tc, prior_capability, e, Type::any_entity_reference());
 
@@ -246,6 +255,9 @@ impl Validator {
             // α; Γ ⊢ e1 : E     M(E) = ({..., ωf : τ, ...}, _)     α; Γ ⊢ e2 : τ
             // ────────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ updateAttribute(e1, f, e2) : *; filta(f, α ∪ {(e1, f)})
+            //
+            // Lean reference 
+            // typeOfUpdateAttribute (uid : Expr) (attr : Attr) (newValue : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::UpdateAttribute(e1, f, e2) => {
                 let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
 
@@ -294,6 +306,9 @@ impl Validator {
             // α; Γ ⊢ e : E     M(E) = ({..., ?f : τ, ...}, _)
             // ────────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ removeAttribute(e, f) : *; filta(f, α∖{(e', f) | e' ∈ Expr})
+            //
+            // Lean reference 
+            // typeOfUpdateAttribute (uid : Expr) (attr : Attr) (newValue : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::RemoveAttribute(e, f) => {
                 let ans_e = Self::typecheck_expr(&tc, prior_capability, e, Type::any_entity_reference());
 
@@ -334,6 +349,9 @@ impl Validator {
             // α; Γ ⊢ e1 : E     α; Γ ⊢ e2 : A     M(E) = (A, H)     {E1,...,En} ⊆ H
             // ────────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ updateEntity(e1, e2, [E1::s1,...,En::sn]) : *; filtt(E, α)
+            //
+            // Lean reference 
+            // typeOfUpdateEntity (uid : Expr) (attrs : Expr) (ancestors : Expr) (env : TypeEnv) (α : Capabilities)
             CommandKind::UpdateEntity(e1, e2, anc_e, tags_e) => {
                 let ans_e1 = Self::typecheck_expr(&tc, prior_capability, e1, Type::any_entity_reference());
 
@@ -475,5 +493,5 @@ impl Validator {
         entity_type: &EntityType,
     ) -> Option<&'a ValidatorEntityType> {
         schema.get_entity_type(entity_type)
-    }
+    }Change language of a few comment and remove unnecessary code
 }
