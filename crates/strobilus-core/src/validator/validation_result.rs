@@ -9,7 +9,7 @@ pub enum StrobilusTypeError {
 
     #[error("expected an entity, but expression `{expr}` has a different type")]
     ExpectedEntity {
-        expr: String,   // ← String invece di Expr
+        expr: String,   
     },
 
     #[error("entity type `{entity_type}` is not declared in the schema")]
@@ -90,16 +90,16 @@ impl StrobilusValidationResult {
         }
 
         if !self.errors.is_empty() {
-            println!("Errori ({})", self.errors.len());
+            println!("Errors ({})", self.errors.len());
             for error in &self.errors {
-                println!("    ✗ {}", error);
+                println!("     {}", error);
             }
         }
 
         if !self.warnings.is_empty() {
             println!("Warning ({})", self.warnings.len());
             for warning in &self.warnings {
-                println!("    ⚠ {}", warning);
+                println!("     {}", warning);
             }
         }
     }

@@ -37,7 +37,7 @@ impl StrobilusValidator {
     }
 
 
-    pub fn validate(&mut self) -> Result<StrobilusValidationResult, Box<dyn std::error::Error>> {
+    pub fn validate(&mut self) -> StrobilusValidationResult {
         self.0.validate()
     }
 }

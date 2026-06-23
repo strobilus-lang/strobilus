@@ -8,42 +8,22 @@ use validation_result::{StrobilusTypeError, StrobilusTypeWarning, StrobilusValid
 use smol_str::SmolStr;
 
 use cedar_policy_core::{
-    ast::PolicySet,
-    ast::Template,
-    //ast::Type,
-    entities::Entities,
-    authorizer::Decision,
-    validator::ValidatorSchema,
-    extensions::Extensions, 
-    validator::Validator as CedarValidator,
-    validator::ValidationError,
-    validator::ValidationWarning,
-    validator::typecheck::SingleEnvTypechecker,
-    validator::typecheck::Typechecker,
-    validator::typecheck::typecheck_answer::TypecheckAnswer,
-    validator::ValidationMode,
-    validator::types::Capability,
+    validator::ValidatorSchema, 
+    validator::typecheck::SingleEnvTypechecker, 
+    validator::typecheck::typecheck_answer::TypecheckAnswer, 
+    validator::ValidationMode, 
+    validator::types::Capability, 
     validator::types::CapabilitySet,
-    validator::typecheck::PolicyCheck,
-    validator::types::Type,
-    validator::types::Type::EntityOrRecord,
-    validator::types::EntityRecordKind,
-    validator::types::EntityLUB,
+    validator::types::Type, 
+    validator::types::EntityRecordKind, 
+    validator::types::EntityLUB, 
     validator::types::RequestEnv,
-    validator::types::OpenTag,
+    validator::types::OpenTag, 
     validator::types::Attributes,
     validator::ValidatorEntityType,
-    ast::EntityType,
-    ast::ExprKind,
-    ast::PolicyID,
-    ast::ResourceConstraint,
-    ast::ActionConstraint,
-    ast::PrincipalConstraint,
-    ast::Effect,
-    ast::Annotations,
-    ast::Expr,
-    ast::ExprBuilder,
-    expr_builder::ExprBuilder as _,
+    ast::EntityType, 
+    ast::ExprKind, 
+    ast::PolicyID, 
 };
 
 
@@ -55,23 +35,24 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn new (commands: CommandSet, schema: ValidatorSchema) -> Self {
+    pub fn new(commands: CommandSet, schema: ValidatorSchema) -> Self {
         Self {
             commands,
             schema,
         }
     }
 
-    pub fn validate(&mut self) -> Result<StrobilusValidationResult, Box<dyn std::error::Error>> {
+    pub fn validate(&mut self) -> StrobilusValidationResult {
+        // Build all request environments from the schema
         let unlinked_env: Vec<RequestEnv> = self.schema
             .unlinked_request_envs(ValidationMode::Strict)
             .collect();
 
         let mut result = StrobilusValidationResult::new();
 
-        // Cedar non espone un'API pubblica per tipare espressioni singole.
-        // Costruiamo un template "sonda" con scope aperto per aggirare
-        // questa limitazione e accedere al SingleEnvTypechecker.
+        // Cedar does not expose a public API for typechecking single expressions.
+        // We build a "probe" template with open scope to work around this limitation
+        // and gain access to the SingleEnvTypechecker.
         let policy_id = PolicyID::from_string("__typecheck_probe__");
 
         for request_env in &unlinked_env {
@@ -79,19 +60,19 @@ impl Validator {
                 &*self.commands.on_allow,
                 request_env,
                 &CapabilitySet::new(),
-                &policy_id,             
+                &policy_id,
                 &mut result,
             );
             self.typecheck_com_by_single_env(
                 &*self.commands.on_deny,
                 request_env,
                 &CapabilitySet::new(),
-                &policy_id,             
+                &policy_id,
                 &mut result,
             );
         }
 
-        Ok(result)
+        result
     }
 
     fn typecheck_com_by_single_env<'a>(
@@ -99,15 +80,15 @@ impl Validator {
         command:          &'a Command,
         request_env:      &'a RequestEnv<'a>,
         prior_capability: &CapabilitySet<'a>,
-        policy_id:        &'a PolicyID,        
+        policy_id:        &'a PolicyID,
         result:           &mut StrobilusValidationResult,
     ) -> CapabilitySet<'a> {
 
-        let tc = Self::make_single_env_tc(&self.schema, request_env, &policy_id);
+        let tc = Self::make_single_env_tc(&self.schema, request_env, policy_id);
 
         match command.inner_kind() {
 
-            // (TypeSkip) — α' = α invariato
+            // (TypeSkip) — always valid, α' = α unchanged
             CommandKind::Skip => {
                 prior_capability.clone()
             }
@@ -116,55 +97,56 @@ impl Validator {
             // α; Γ ⊢ₛ c1 : *; α1     α1; Γ ⊢ₛ c2 : *; α2
             // ─────────────────────────────────────────────
             // α; Γ ⊢ₛ c1;c2 : *; α2
+            //
+            // The output capabilities of c1 become the input capabilities of c2.
             CommandKind::Sequence(c1, c2) => {
-                // α1 = output di c1 diventa input di c2
                 let alpha1 = self.typecheck_com_by_single_env(c1, request_env, prior_capability, policy_id, result);
-                self.typecheck_com_by_single_env(c2, request_env, &alpha1, policy_id,  result)
+                self.typecheck_com_by_single_env(c2, request_env, &alpha1, policy_id, result)
             }
 
-            // (TypeIfC1) cond : True  → typecheck solo then con α ∪ ε, ignora else
-            // (TypeIfC2) cond : False → typecheck solo else con α, ignora then
-            // (TypeIfC3) cond : Bool  → typecheck entrambi, α' = α1 ∩ α2
+            // (TypeIfC1) cond : True  → typecheck only then with α ∪ ε, skip else
+            // (TypeIfC2) cond : False → typecheck only else with α, skip then
+            // (TypeIfC3) cond : Bool  → typecheck both branches, α' = α1 ∩ α2
             CommandKind::IfThenElse(cond, then_cmd, else_cmd) => {
 
                 // α; Γ ⊢ cond : Bool
                 let ans_cond = Self::typecheck_expr(&tc, prior_capability, cond, Type::primitive_boolean());
 
-                // ε = capabilities prodotte dalla condizione
+                // ε = capabilities produced by the condition expression
                 let epsilon = match &ans_cond {
                     TypecheckAnswer::TypecheckSuccess { expr_capability, .. } => expr_capability.clone(),
                     _ => CapabilitySet::new(),
                 };
 
-                // α ∪ ε — capabilities arricchite per il ramo then
+                // α ∪ ε — enriched capabilities for the then branch
                 let alpha_union_epsilon = prior_capability.union(&epsilon);
 
                 match Self::get_expr_type(&ans_cond) {
 
-                    // TypeIfC1: α' = α1 (solo then con α ∪ ε)
+                    // TypeIfC1: α' = α1 (only then branch with α ∪ ε)
                     Some(Type::True) => {
                         result.warnings.insert(StrobilusTypeWarning::ConditionAlwaysTrue {
                             expr: cond.to_string(),
                         });
-                        self.typecheck_com_by_single_env(then_cmd, request_env, &alpha_union_epsilon, policy_id,  result)
+                        self.typecheck_com_by_single_env(then_cmd, request_env, &alpha_union_epsilon, policy_id, result)
                     }
 
-                    // TypeIfC2: α' = α1 (solo else con α)
+                    // TypeIfC2: α' = α1 (only else branch with α)
                     Some(Type::False) => {
                         result.warnings.insert(StrobilusTypeWarning::ConditionAlwaysFalse {
                             expr: cond.to_string(),
                         });
-                        self.typecheck_com_by_single_env(else_cmd, request_env, prior_capability, policy_id,  result)
+                        self.typecheck_com_by_single_env(else_cmd, request_env, prior_capability, policy_id, result)
                     }
 
                     // TypeIfC3: α' = α1 ∩ α2
                     Some(_) => {
-                        let alpha1 = self.typecheck_com_by_single_env(then_cmd, request_env, &alpha_union_epsilon, policy_id,  result);
-                        let alpha2 = self.typecheck_com_by_single_env(else_cmd, request_env, prior_capability, policy_id,  result);
+                        let alpha1 = self.typecheck_com_by_single_env(then_cmd, request_env, &alpha_union_epsilon, policy_id, result);
+                        let alpha2 = self.typecheck_com_by_single_env(else_cmd, request_env, prior_capability, policy_id, result);
                         alpha1.intersect(&alpha2)
                     }
 
-                    // Condizione non booleana — errore, α' = α invariato
+                    // Non-boolean condition — error, α' = α unchanged
                     None => {
                         result.errors.insert(StrobilusTypeError::NonBooleanCondition {
                             expr: cond.to_string(),
@@ -184,6 +166,7 @@ impl Validator {
 
                 match (Self::extract_entity_type(&ans_e1), Self::extract_entity_type(&ans_e2)) {
                     (Some(E1), Some(E2)) => {
+                        // M(E1) = (_, H1), check E2 ∈ H1
                         if !Self::is_valid_parent(&self.schema, E1, E2) {
                             result.errors.insert(StrobilusTypeError::InvalidParentType {
                                 child_type:  E1.to_string(),
@@ -206,7 +189,7 @@ impl Validator {
                 prior_capability.filtp()
             }
 
-            // (TypeRemoveParent) — stesse premesse di AddParent
+            // (TypeRemoveParent) — same premises as AddParent
             // α; Γ ⊢ e1 : E1     α; Γ ⊢ e2 : E2     M(E1) = (_, H1)     E2 ∈ H1
             // ───────────────────────────────────────────────────────────────────────
             // α; Γ ⊢ₛ removeParent(e1, e2) : *; filtp(α)
@@ -216,6 +199,7 @@ impl Validator {
 
                 match (Self::extract_entity_type(&ans_e1), Self::extract_entity_type(&ans_e2)) {
                     (Some(E1), Some(E2)) => {
+                        // M(E1) = (_, H1), check E2 ∈ H1
                         if !Self::is_valid_parent(&self.schema, E1, E2) {
                             result.errors.insert(StrobilusTypeError::InvalidParentType {
                                 child_type:  E1.to_string(),
@@ -250,7 +234,7 @@ impl Validator {
                         result.errors.insert(StrobilusTypeError::ExpectedEntity {
                             expr: e.to_string(),
                         });
-                        // α' = α invariato in caso di errore
+                        // α' = α unchanged on error
                         prior_capability.clone()
                     }
                     // α' = filtt(E, α)
@@ -273,6 +257,7 @@ impl Validator {
                         prior_capability.clone()
                     }
                     Some(E) => {
+                        // M(E) = ({..., ωf : τ, ...}, _)
                         match Self::lookup_entity(&self.schema, E).and_then(|info| info.attr(f)) {
                             None => {
                                 result.errors.insert(StrobilusTypeError::UnknownAttribute {
@@ -320,6 +305,7 @@ impl Validator {
                         prior_capability.clone()
                     }
                     Some(E) => {
+                        // M(E) = ({..., ?f : τ, ...}, _)
                         match Self::lookup_entity(&self.schema, E).and_then(|info| info.attr(f)) {
                             None => {
                                 result.errors.insert(StrobilusTypeError::UnknownAttribute {
@@ -329,6 +315,7 @@ impl Validator {
                                 });
                                 prior_capability.clone()
                             }
+                            // f must be optional (?f) — required attributes cannot be removed
                             Some(attr_info) if attr_info.is_required => {
                                 result.errors.insert(StrobilusTypeError::CannotRemoveRequiredAttribute {
                                     entity_type: E.to_string(),
@@ -368,7 +355,7 @@ impl Validator {
                             }
                             Some(entity_info) => {
 
-                                // α; Γ ⊢ e2 : A
+                                // α; Γ ⊢ e2 : A, where A is the record type of E in the schema
                                 let type_A = Type::EntityOrRecord(EntityRecordKind::Record {
                                     attrs:           entity_info.attributes().clone(),
                                     open_attributes: OpenTag::ClosedAttributes,
@@ -382,7 +369,7 @@ impl Validator {
                                     });
                                 }
 
-                                // {E1,...,En} ⊆ H
+                                // {E1,...,En} ⊆ H — verify each ancestor in the list
                                 if let ExprKind::Set(elements) = anc_e.expr_kind() {
                                     for element in elements.iter() {
                                         let ans_elem = Self::typecheck_expr(
@@ -406,7 +393,7 @@ impl Validator {
                                     }
                                 }
 
-                                // tags_e — record aperto
+                                // tags_e — open record, accepts any record including empty
                                 let type_tags = Type::EntityOrRecord(EntityRecordKind::Record {
                                     attrs:           Attributes::with_required_attributes(std::iter::empty()),
                                     open_attributes: OpenTag::OpenAttributes,
@@ -428,18 +415,18 @@ impl Validator {
         }
     }
 
-    /// Crea un SingleEnvTypechecker per un dato request environment.
-    /// Corrisponde al contesto α; Γ nelle regole di tipizzazione del paper.
+    /// Creates a SingleEnvTypechecker for a given request environment.
+    /// Corresponds to the context α; Γ in the typing rules of the paper.
     fn make_single_env_tc<'a>(
         schema: &'a ValidatorSchema,
         request_env: &'a RequestEnv<'a>,
-        policy_id: &'a PolicyID,        
+        policy_id: &'a PolicyID,
     ) -> SingleEnvTypechecker<'a> {
         SingleEnvTypechecker::new(schema, ValidationMode::Strict, policy_id, request_env)
     }
 
-    /// Tipa un'espressione e verifica che abbia il tipo atteso.
-    /// Corrisponde alla premessa α; Γ ⊢ e : τ nelle regole del paper.
+    /// Typechecks an expression against an expected type.
+    /// Corresponds to the premise α; Γ ⊢ e : τ in the typing rules of the paper.
     fn typecheck_expr<'a>(
         tc: &SingleEnvTypechecker<'a>,
         caps: &CapabilitySet<'a>,
@@ -450,8 +437,8 @@ impl Validator {
         tc.expect_type(caps, expr, expected_type, &mut type_errors, |_| None)
     }
 
-    /// Estrae il tipo dell'espressione dall'answer del typechecker.
-    /// Funziona sia per TypecheckSuccess che TypecheckFail.
+    /// Extracts the inferred type from a TypecheckAnswer.
+    /// Works for both TypecheckSuccess and TypecheckFail.
     fn get_expr_type<'a>(ans: &'a TypecheckAnswer<'a>) -> Option<&'a Type> {
         match ans {
             TypecheckAnswer::TypecheckSuccess { expr_type, .. } => expr_type.data().as_ref(),
@@ -460,8 +447,8 @@ impl Validator {
         }
     }
 
-    /// Estrae l'EntityType concreto da una TypecheckAnswer.
-    /// Corrisponde al caso α; Γ ⊢ e : E nelle regole del paper.
+    /// Extracts the concrete EntityType from a TypecheckAnswer.
+    /// Corresponds to the case α; Γ ⊢ e : E in the typing rules of the paper.
     fn extract_entity_type<'a>(ans: &'a TypecheckAnswer) -> Option<&'a EntityType> {
         match Self::get_expr_type(ans)? {
             Type::EntityOrRecord(EntityRecordKind::Entity(lub)) => {
@@ -472,8 +459,8 @@ impl Validator {
         }
     }
 
-    /// Verifica che E2 sia un antenato valido di E1 secondo lo schema.
-    /// Corrisponde al check M(E1) = (_, H1) e E2 ∈ H1 nelle regole del paper.
+    /// Checks whether E2 is a valid ancestor type of E1 according to the schema.
+    /// Corresponds to the check M(E1) = (_, H1) and E2 ∈ H1 in the typing rules.
     fn is_valid_parent(schema: &ValidatorSchema, E1: &EntityType, E2: &EntityType) -> bool {
         match schema.ancestors(E1) {
             Some(mut ancestors) => ancestors.any(|et| et == E2),
@@ -481,8 +468,8 @@ impl Validator {
         }
     }
 
-    /// Recupera le informazioni di un'entità dallo schema.
-    /// Corrisponde al lookup M(E) nelle regole del paper.
+    /// Retrieves entity information from the schema.
+    /// Corresponds to the lookup M(E) in the typing rules of the paper.
     fn lookup_entity<'a>(
         schema: &'a ValidatorSchema,
         entity_type: &EntityType,
@@ -490,4 +477,3 @@ impl Validator {
         schema.get_entity_type(entity_type)
     }
 }
-
