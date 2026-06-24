@@ -121,28 +121,6 @@ impl OptimisticWrapper {
         Self(self.0.clone())
     }
 
-    // // Call internal is_authorized, retries 3 times in case of internal error, then returns Deny
-    // pub fn is_authorized(&mut self, request: Request) -> Decision {
-    //     let mut return_value = Decision::Deny;
-    //     let mut retry_flag = true;
-    //     let mut attempt_count = 3;
-
-    //     while (retry_flag == true) && (attempt_count > 0) {
-    //         retry_flag = false;
-    //         return_value = match self.0.is_authorized(&request.0) {
-    //             Ok(decision) => decision,
-    //             Err(_) => {
-    //                 print_thread_id("RETRY");
-    //                 retry_flag = true;
-    //                 attempt_count -= 1;
-    //                 Decision::Deny
-    //             },
-    //         };
-    //     }
-
-    //     return_value
-    // }
-
     pub fn is_authorized(&mut self, request: Request) -> Decision { 
         let base_delay: f64 = 10.0;
         let max_delay: f64 = 1000.0;
@@ -177,8 +155,6 @@ impl OptimisticWrapper {
         let exp_delay = base_delay * (2_f64.powi(attempt as i32));
         let cap_delay = exp_delay.min(max_delay);
         let delay = rng.gen_range(0.0..=cap_delay).round() as u64;
-        print_thread_id(&format!("Slept for {:?} millis after attempt {}", delay, attempt));
-        print_thread_id(&format!("exp_delay: {:?}, cap_delay: {:?}", exp_delay, cap_delay));
         Duration::from_millis(delay)
     }
 
