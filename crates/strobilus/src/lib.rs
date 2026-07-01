@@ -120,7 +120,7 @@ impl OptimisticWrapper {
 
     pub fn is_authorized(&mut self, request: Request) -> Decision { 
         let base_delay: f64 = 10.0;
-        let max_delay: f64 = 1000.0;
+        let max_delay: f64 = 100.0;
         let mut attempt: i32 = 1;
         let max_attempt: i32 = 10;
         
@@ -139,7 +139,7 @@ impl OptimisticWrapper {
             };
 
             if retry_flag {
-                thread::sleep(Self::calculate_delay(base_delay, max_delay, attempt));
+                // thread::sleep(Self::calculate_delay(base_delay, max_delay, attempt));
                 attempt += 1;
             }
         }
