@@ -182,8 +182,8 @@ impl OptimisticAuthorizer {
         let result = self.engine.evaluate(request, &entities)?;
 
         // Insert a delay before entities store is modified to force race condition
-        use std::{time::Duration, thread};
-        thread::sleep(Duration::from_millis(200));
+        // use std::{time::Duration, thread};
+        // thread::sleep(Duration::from_millis(200));
 
         // Execute the obligations on the entity store
         let return_value = match self.interpreter.execute(request, result.clone(), interpreter_copy, &entities) {
