@@ -91,6 +91,7 @@ pub fn parse_obligations_file(path: &str) -> Result<CommandSet, Box<dyn std::err
 use std::thread;
 use rand::Rng;
 
+#[derive(Clone)]
 pub struct OptimisticWrapper (authorizer::OptimisticAuthorizer);
 
 impl OptimisticWrapper {
@@ -115,10 +116,6 @@ impl OptimisticWrapper {
     /// [`Self::from_json_file`], [`Self::from_json_value`], or [`Self::from_json_str`].
     pub fn to_json_value(&self) -> Result<serde_json::Value, cedar_policy_core::entities::err::EntitiesError> {
         self.0.clone().entities().to_json_value()
-    }
-
-    pub fn clone(&self) -> Self {
-        Self(self.0.clone())
     }
 
     pub fn is_authorized(&mut self, request: Request) -> Decision { 
@@ -157,8 +154,44 @@ impl OptimisticWrapper {
         let delay = rng.gen_range(0.0..=cap_delay).round() as u64;
         Duration::from_millis(delay)
     }
-
 }
+
+
+// ---------------------------------- MUTEX AUTHORIZER IMPLEMENTATION ----------------------------------
+
+
+use std::sync::{Arc, Mutex};
+
+pub struct MutexAuthorizer {
+    authorizer: Arc<Mutex<StrobilusAuthorizer>>,
+}
+
+impl MutexAuthorizer {
+    pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
+        Self{ 
+            authorizer: Arc::new(Mutex::new(StrobilusAuthorizer::new(
+                policies,
+                commands,
+                entities,
+            )))
+        }
+    }
+
+    pub fn is_authorized(&mut self, request: Request) -> Decision {
+        self.authorizer.lock().unwrap().is_authorized(request)
+    }
+
+    pub fn to_json_value(&self) -> Result<serde_json::Value, cedar_policy_core::entities::err::EntitiesError> {
+        self.authorizer.lock().unwrap().to_json_value()
+    }
+}
+
+impl Clone for MutexAuthorizer {
+    fn clone(&self) -> Self {
+        MutexAuthorizer { authorizer: Arc::clone(&self.authorizer) }
+    } 
+}
+
 
 pub fn print_thread_id(string: &str) {
     use std::thread::*;
