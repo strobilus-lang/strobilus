@@ -160,16 +160,16 @@ impl OptimisticWrapper {
 // ---------------------------------- MUTEX AUTHORIZER IMPLEMENTATION ----------------------------------
 
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
-pub struct MutexAuthorizer {
-    authorizer: Arc<Mutex<StrobilusAuthorizer>>,
+pub struct PessimisticAuthorizer {
+    authorizer: Arc<RwLock<StrobilusAuthorizer>>,
 }
 
-impl MutexAuthorizer {
+impl PessimisticAuthorizer {
     pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
         Self{ 
-            authorizer: Arc::new(Mutex::new(StrobilusAuthorizer::new(
+            authorizer: Arc::new(RwLock::new(StrobilusAuthorizer::new(
                 policies,
                 commands,
                 entities,
@@ -178,17 +178,17 @@ impl MutexAuthorizer {
     }
 
     pub fn is_authorized(&mut self, request: Request) -> Decision {
-        self.authorizer.lock().unwrap().is_authorized(request)
+        self.authorizer.write().unwrap().is_authorized(request)
     }
 
     pub fn to_json_value(&self) -> Result<serde_json::Value, cedar_policy_core::entities::err::EntitiesError> {
-        self.authorizer.lock().unwrap().to_json_value()
+        self.authorizer.read().unwrap().to_json_value()
     }
 }
 
-impl Clone for MutexAuthorizer {
+impl Clone for PessimisticAuthorizer {
     fn clone(&self) -> Self {
-        MutexAuthorizer { authorizer: Arc::clone(&self.authorizer) }
+        PessimisticAuthorizer { authorizer: Arc::clone(&self.authorizer) }
     } 
 }
 
