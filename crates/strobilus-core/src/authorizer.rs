@@ -177,21 +177,56 @@ impl OptimisticAuthorizer {
         
         // Do a copy of the whole InnerInterpreter plus the entities
         let (interpreter_copy, entities) = self.interpreter.get_interpreter_and_entities();
-        
-        // Evaluate request on the entities
-        let result = self.engine.evaluate(request, &entities)?;
+
+        // This has to be done to ensure code compilation, otherwise when calling execute
+        // both a mutable (read_set_guard) and immutable (execute) reference to the same
+        // object is taken
+        let (result, read_set) = {
+            // Instantiate the ReadSetGuard to clean task read set even in case of panic
+            let _read_set_guard = ReadSetGuard::new(&entities);
+
+            // Evaluate request on the entities
+            let result = self.engine.evaluate(request, &entities)?;
+
+            // Extract read set after evaluation
+            let read_set = entities.extract_read_set();
+
+            (result, read_set)
+        };
 
         // Insert a delay before entities store is modified to force race condition
         // use std::{time::Duration, thread};
         // thread::sleep(Duration::from_millis(200));
 
         // Execute the obligations on the entity store
-        let return_value = match self.interpreter.execute(request, result.clone(), interpreter_copy, &entities) {
+        let return_value = match self.interpreter.execute(request, result.clone(), interpreter_copy, read_set, &entities) {
             Ok(()) => Ok(result.decision),
             Err(e) => Err(e)
         };
 
         return_value
+    }
+}
+
+pub struct ReadSetGuard<'a> {
+    entities: &'a Entities,
+    task_id: tokio::task::Id,
+}
+
+impl<'a> ReadSetGuard<'a> {
+    pub fn new(entities: &'a Entities) -> Self {
+        let task_id = tokio::task::id();
+        entities.clean_map_entry(&task_id);
+        Self {
+            entities, 
+            task_id
+        }
+    }
+}
+
+impl<'a> Drop for ReadSetGuard<'a> {
+    fn drop(&mut self) {
+        self.entities.clean_map_entry(&self.task_id);
     }
 }
 
