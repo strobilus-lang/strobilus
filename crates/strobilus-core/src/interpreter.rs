@@ -251,8 +251,7 @@ fn remove_jusification(es: &mut BasicEntityStore) {
 // ---------------------------------- INNER INTERPRETER + VERSIONED INTERPRETER IMPLEMENTATION ----------------------------------
 
 use std::collections::HashMap;
-use std::sync::Mutex;
-use crate::authorizer::print_thread_id;
+use std::sync::RwLock;
 
 /// Struct containing the Entity store and related versions hashmap 
 #[derive(Debug, Clone)]
@@ -357,26 +356,26 @@ pub enum StoreOp {
 /// Struct that contains InnerInterpreter and Obligations
 #[derive(Debug, Clone)]
 pub struct VersionedInterpreter {
-    inner: Arc<Mutex<InnerInterpreter>>,
+    inner: Arc<RwLock<InnerInterpreter>>,
     commands: Arc<CommandSet>,
 }
 
 impl VersionedInterpreter {
     pub fn new(commands: CommandSet, entities: Entities) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(InnerInterpreter::new( entities))),
+            inner: Arc::new(RwLock::new(InnerInterpreter::new( entities))),
             commands: Arc::new(commands),
         }
     }
 
     /// Extract entities from entities store
     pub fn entity_store(self) -> Entities {
-        self.inner.lock().unwrap().clone().entity_store()
+        self.inner.read().unwrap().clone().entity_store()
     }
 
     /// Extracts both a copy of the interpreter and the entities, returning a tuple
     pub fn get_interpreter_and_entities(&self) -> (InnerInterpreter, Entities) {
-        let inner_interpreter = self.inner.lock().unwrap().clone();
+        let inner_interpreter = self.inner.read().unwrap().clone();
         (inner_interpreter.clone(), inner_interpreter.entity_store())
     }
 
@@ -385,13 +384,14 @@ impl VersionedInterpreter {
     // If there's no version mismatch apply changes to shared copy
     fn validate(
         &self, 
-        locked_inner: &mut InnerInterpreter,
         old_versions: &HashMap<EntityUID, u64>, 
         op_vector: Vec<StoreOp>,
         write_set: HashSet<EntityUID>,
         read_set: HashSet<EntityUID>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         
+        let mut locked_inner = self.inner.write().unwrap();
+
         let mut error_flag = false;
     
         // Check every uid in (write_set U read_set)
@@ -425,6 +425,7 @@ impl VersionedInterpreter {
         request: &Request,
         result: EvaluationResult,
         mut interpreter_copy: InnerInterpreter,
+        read_set: HashSet<EntityUID>,
         entities: &Entities,
     ) -> Result<(), Box<dyn std::error::Error>> {
         //
@@ -528,14 +529,7 @@ impl VersionedInterpreter {
         //
         remove_jusification(&mut interpreter_copy.entity_store);
 
-        let read_set = entities.read_set();
-
-        return {
-            // Acquire lock for validating and eventually writing the value
-            let mut locked_inner = self.inner.lock().unwrap();
-
-            // Validate + write entity_store (if no errors raise during validation)
-            self.validate(&mut locked_inner, &old_versions, op_vector, write_set, read_set)         
-        };
+        // Validate + write entity_store (if no errors raise during validation)
+        self.validate(&old_versions, op_vector, write_set, read_set)         
     }
 }
