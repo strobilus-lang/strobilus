@@ -375,8 +375,10 @@ impl VersionedInterpreter {
 
     /// Extracts both a copy of the interpreter and the entities, returning a tuple
     pub fn get_interpreter_and_entities(&self) -> (InnerInterpreter, Entities) {
-        let inner_interpreter = self.inner.read().unwrap().clone();
-        (inner_interpreter.clone(), inner_interpreter.entity_store())
+        let guard = self.inner.read().unwrap();
+        let interpreter_copy = guard.clone();
+        let entities = guard.entity_store.clone().into_entities(); 
+        (interpreter_copy, entities)
     }
 
     // Validates the versions of the Entities contained in the local copy
