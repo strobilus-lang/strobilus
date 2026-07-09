@@ -152,7 +152,7 @@ use crate::interpreter::VersionedInterpreter;
 
 #[derive(Debug, Clone)]
 pub struct OptimisticAuthorizer {
-    engine: PolicyEngine,
+    engine: Arc<PolicyEngine>,
     interpreter: VersionedInterpreter,
 }
 
@@ -160,7 +160,7 @@ impl OptimisticAuthorizer {
     
     pub fn new(policies: PolicySet, commands: CommandSet, entities: Entities) -> Self {
         Self {
-            engine: PolicyEngine::new(policies),
+            engine: Arc::new(PolicyEngine::new(policies)),
             interpreter: VersionedInterpreter::new(commands, entities),
         }
     }
