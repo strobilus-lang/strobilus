@@ -88,7 +88,6 @@ pub fn parse_obligations_file(path: &str) -> Result<CommandSet, Box<dyn std::err
 
 // ---------------------------------- OPTIMISTIC WRAPPER IMPLEMENTATION ----------------------------------
 
-use std::thread;
 use rand::Rng;
 
 #[derive(Clone)]
@@ -162,6 +161,7 @@ impl OptimisticWrapper {
 
 use std::sync::{Arc, RwLock};
 
+#[derive(Clone)]
 pub struct PessimisticAuthorizer {
     authorizer: Arc<RwLock<StrobilusAuthorizer>>,
 }
@@ -185,13 +185,6 @@ impl PessimisticAuthorizer {
         self.authorizer.read().unwrap().to_json_value()
     }
 }
-
-impl Clone for PessimisticAuthorizer {
-    fn clone(&self) -> Self {
-        PessimisticAuthorizer { authorizer: Arc::clone(&self.authorizer) }
-    } 
-}
-
 
 pub fn print_thread_id(string: &str) {
     use std::thread::*;
