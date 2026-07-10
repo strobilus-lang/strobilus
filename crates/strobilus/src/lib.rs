@@ -126,12 +126,13 @@ impl OptimisticWrapper {
         let mut return_value = Decision::Deny;
         let mut retry_flag = true;
         
-        while retry_flag && (attempt <= max_attempt) {
+        // while retry_flag && (attempt <= max_attempt) {
+        while retry_flag {
             retry_flag = false;
             return_value = match self.0.is_authorized(&request.0){
                 Ok(decision) => decision, 
                 Err(_) => {
-                    print_thread_id("RETRY");
+                    // print_thread_id("RETRY");
                     retry_flag = true;
                     Decision::Deny
                 }

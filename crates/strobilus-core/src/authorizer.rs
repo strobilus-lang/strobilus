@@ -230,7 +230,6 @@ impl<'a> Drop for ReadSetGuard<'a> {
     }
 }
 
-pub fn print_thread_id(string: &str) {
-    use std::thread::*;
-    println!("--- THREAD {:?}: {}", current().id(), string);
+pub fn print_task_id(string: &str) {
+    println!("--- TASK {:?}: {}", tokio::task::id(), string);
 }
