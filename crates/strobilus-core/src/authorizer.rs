@@ -149,6 +149,7 @@ impl PolicyEngine {
 // ---------------------------------- OPTIMISTIC AUTHORIZER IMPLEMENTATION ----------------------------------
 
 use crate::interpreter::VersionedInterpreter;
+use crate::entities::store::OptimisticEntityStore;
 
 #[derive(Debug, Clone)]
 pub struct OptimisticAuthorizer {
@@ -175,21 +176,28 @@ impl OptimisticAuthorizer {
         request: &Request,
     ) -> Result<Decision, Box<dyn std::error::Error>> {
         
-        // Do a copy of the whole InnerInterpreter plus the entities
-        let (interpreter_copy, entities) = self.interpreter.get_interpreter_and_entities();
+        // Clone the Version Hashmap when starting transaction
+        let old_versions = self.interpreter.get_versions();
 
-        // This has to be done to ensure code compilation, otherwise when calling execute
+        // Clone Arc containing the store and get the reference to the inner Entities
+        let store_arc = self.interpreter.get_entity_store_arc();
+        let entities_ref = {
+            let locked_store = store_arc.read().unwrap();
+            locked_store.get_entities_ref()
+        };
+
+        // This has to be done to ensure the code compiles, otherwise when calling execute
         // both a mutable (read_set_guard) and immutable (execute) reference to the same
         // object is taken
         let (result, read_set) = {
             // Instantiate the ReadSetGuard to clean task read set even in case of panic
-            let _read_set_guard = ReadSetGuard::new(&entities);
+            let _read_set_guard = ReadSetGuard::new(&entities_ref);
 
             // Evaluate request on the entities
-            let result = self.engine.evaluate(request, &entities)?;
+            let result = self.engine.evaluate(request, &entities_ref)?;
 
             // Extract read set after evaluation
-            let read_set = entities.extract_read_set();
+            let read_set = entities_ref.extract_read_set();
 
             (result, read_set)
         };
@@ -199,7 +207,7 @@ impl OptimisticAuthorizer {
         // thread::sleep(Duration::from_millis(200));
 
         // Execute the obligations on the entity store
-        let return_value = match self.interpreter.execute(request, result.clone(), interpreter_copy, read_set, &entities) {
+        let return_value = match self.interpreter.execute(request, result.clone(), old_versions, read_set, &entities_ref) {
             Ok(()) => Ok(result.decision),
             Err(e) => Err(e)
         };

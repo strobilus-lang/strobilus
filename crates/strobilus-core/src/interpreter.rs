@@ -253,91 +253,6 @@ fn remove_jusification(es: &mut BasicEntityStore) {
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-/// Struct containing the Entity store and related versions hashmap 
-#[derive(Debug, Clone)]
-pub struct InnerInterpreter {
-    entity_store: BasicEntityStore,
-    versions: HashMap<EntityUID, u64>,
-}
-
-impl InnerInterpreter {
-
-    pub fn new(entities: Entities) -> Self {
-        let mut versions = HashMap::new();
-        for e in entities.clone().into_iter() {versions.insert(e.uid().clone(), 1);}
-        
-        let entity_store = BasicEntityStore::new(entities);
-        
-        Self{
-            entity_store,
-            versions
-        }
-    }
-
-    pub fn entity_store(self) -> Entities {
-        self.entity_store.into_entities()
-    }
-
-    /// For a specified uid, checks that actual version and old version corresponds
-    fn mismatch(&self, old_versions: &HashMap<EntityUID, u64>, uid: &EntityUID) -> bool {
-        old_versions.get(uid).copied().unwrap_or(0) != self.get_version_value(uid)
-    }
-
-    /// For a specified uid gets the version value from shared interpreter, or 0 if value is not present
-    fn get_version_value(&self, uid: &EntityUID) -> u64 {
-        self.versions.get(uid).copied().unwrap_or(0)
-    }
-
-    /// Extract the whole versions hashmap
-    pub fn get_versions(&self) -> HashMap<EntityUID, u64> {
-        self.versions.clone()
-    }
-
-    /// Increase version value for specified uid
-    fn increase_version(&mut self, uid: &EntityUID) {
-        self.versions.insert(uid.clone(), self.get_version_value(uid) + 1);
-    }
-
-    /// Remove version value for specified uid
-    fn remove_version(&mut self, uid: &EntityUID) {
-        self.versions.remove(uid);
-    }
-
-    // TODO: should return something?
-    // Applies vector of StoreOp to self.entity_store
-    fn apply_operations(&mut self, op_vector: Vec<StoreOp>) {
-        for operation in op_vector {
-            match operation {
-                StoreOp::AddParent {child_uid, parent_uid} => {
-                    self.increase_version(&child_uid);
-                    self.entity_store.add_parent(&child_uid, parent_uid);
-                },
-                StoreOp::RemoveParent {child_uid, parent_uid} => {
-                    self.increase_version(&child_uid);
-                    self.entity_store.remove_parent(&child_uid, &parent_uid);
-                },
-                StoreOp::UpdateEntity {uid, attrs, parents, tags} => {
-                    self.increase_version(&uid);
-                    self.entity_store.update_entity(uid, attrs, parents, tags);
-                },
-                StoreOp::RemoveEntity {uid} => {
-                    self.remove_version(&uid);
-                    self.entity_store.remove_entity(&uid);
-                },
-                StoreOp::UpdateAttribute {uid, key, value} => {
-                    self.increase_version(&uid);
-                    self.entity_store.update_attribute(&uid, key, value);
-                },
-                StoreOp::RemoveAttribute {uid, key} => {
-                    self.increase_version(&uid);
-                    self.entity_store.remove_attribute(&uid, &key);
-                },
-            };
-        }
-    }
-}
-
-
 // Enum to classify operations on the Entities store
 pub enum StoreOp {
     AddParent {child_uid: EntityUID, parent_uid: EntityUID},
@@ -353,32 +268,124 @@ pub enum StoreOp {
     RemoveAttribute {uid: EntityUID, key: SmolStr}
 }
 
+#[derive(Debug, Clone)]
+pub struct VersionHashmap {
+    map: HashMap<EntityUID, u64>,
+}
+
+impl VersionHashmap {
+    pub fn new(entities: &Entities) -> Self {
+        let mut map = HashMap::new();
+        for e in entities.clone().into_iter() {map.insert(e.uid().clone(), 1);}
+        Self{map}
+    }
+
+    /// For a specified uid gets the version value from shared interpreter, or 0 if value is not present
+    fn get_version_value(&self, uid: &EntityUID) -> u64 {
+        self.map.get(uid).copied().unwrap_or(0)
+    }
+
+    /// Extract the whole versions hashmap
+    pub fn get_versions(&self) -> HashMap<EntityUID, u64> {
+        self.map.clone()
+    }
+
+    /// For a specified uid, checks that actual version and old version corresponds
+    fn mismatch(&self, old_versions: &VersionHashmap, uid: &EntityUID) -> bool {
+        old_versions.map.get(uid).copied().unwrap_or(0) != self.get_version_value(uid)
+    }
+
+    /// Increase version value for specified uid
+    fn increase_version(&mut self, uid: &EntityUID) {
+        self.map.insert(uid.clone(), self.get_version_value(uid) + 1);
+    }
+
+    /// Remove version value for specified uid
+    fn remove_version(&mut self, uid: &EntityUID) {
+        self.map.remove(uid);
+    }
+
+}
+
 /// Struct that contains InnerInterpreter and Obligations
 #[derive(Debug, Clone)]
 pub struct VersionedInterpreter {
-    inner: Arc<RwLock<InnerInterpreter>>,
+    entity_store: Arc<RwLock<BasicEntityStore>>,
+    versions: Arc<RwLock<VersionHashmap>>,
     commands: Arc<CommandSet>,
 }
 
 impl VersionedInterpreter {
     pub fn new(commands: CommandSet, entities: Entities) -> Self {
+        let versions = Arc::new(RwLock::new(VersionHashmap::new(&entities)));
+        let entity_store = 
+            Arc::new(
+            RwLock::new(
+            BasicEntityStore::new(entities)
+        ));
         Self {
-            inner: Arc::new(RwLock::new(InnerInterpreter::new( entities))),
+            entity_store,
+            versions,
             commands: Arc::new(commands),
         }
     }
 
-    /// Extract entities from entities store
-    pub fn entity_store(self) -> Entities {
-        self.inner.read().unwrap().clone().entity_store()
+    // Return the current versions map
+    pub fn get_versions(&self) -> VersionHashmap {
+        self.versions.read().unwrap().clone()
     }
 
-    /// Extracts both a copy of the interpreter and the entities, returning a tuple
-    pub fn get_interpreter_and_entities(&self) -> (InnerInterpreter, Entities) {
-        let guard = self.inner.read().unwrap();
-        let interpreter_copy = guard.clone();
-        let entities = guard.entity_store.clone().into_entities(); 
-        (interpreter_copy, entities)
+    // Get an immutable snapshot of the store
+    pub fn get_entity_store_arc(&self) -> Arc<RwLock<BasicEntityStore>> {
+        self.entity_store.clone()
+    }
+
+    // Get a copy of the entities, consuming the actual value
+    // WARNING: MIGHT BE VERY TIME CONSUMING
+    pub fn entity_store(self) -> Entities {
+        let store_clone = {
+            let locked_store = self.entity_store.read().unwrap();
+            locked_store.clone()
+        };
+        store_clone.into_entities()
+    }
+
+    // TODO: should return something?
+    // Applies vector of StoreOp to locked entity store
+    fn apply_operations(
+        &self,
+        locked_store: &mut BasicEntityStore,
+        locked_versions: &mut VersionHashmap, 
+        op_vector: Vec<StoreOp>
+    ) {
+        for operation in op_vector {
+            match operation {
+                StoreOp::AddParent {child_uid, parent_uid} => {
+                    locked_versions.increase_version(&child_uid);
+                    locked_store.add_parent(&child_uid, parent_uid);
+                },
+                StoreOp::RemoveParent {child_uid, parent_uid} => {
+                    locked_versions.increase_version(&child_uid);
+                    locked_store.remove_parent(&child_uid, &parent_uid);
+                },
+                StoreOp::UpdateEntity {uid, attrs, parents, tags} => {
+                    locked_versions.increase_version(&uid);
+                    locked_store.update_entity(uid, attrs, parents, tags);
+                },
+                StoreOp::RemoveEntity {uid} => {
+                    locked_versions.remove_version(&uid);
+                    locked_store.remove_entity(&uid);
+                },
+                StoreOp::UpdateAttribute {uid, key, value} => {
+                    locked_versions.increase_version(&uid);
+                    locked_store.update_attribute(&uid, key, value);
+                },
+                StoreOp::RemoveAttribute {uid, key} => {
+                    locked_versions.increase_version(&uid);
+                    locked_store.remove_attribute(&uid, &key);
+                },
+            };
+        }
     }
 
     // Validates the versions of the Entities contained in the local copy
@@ -386,20 +393,21 @@ impl VersionedInterpreter {
     // If there's no version mismatch apply changes to shared copy
     fn validate(
         &self, 
-        old_versions: &HashMap<EntityUID, u64>, 
+        old_versions: VersionHashmap, 
         op_vector: Vec<StoreOp>,
         write_set: HashSet<EntityUID>,
         read_set: HashSet<EntityUID>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         
-        let mut locked_inner = self.inner.write().unwrap();
+        let mut locked_store = self.entity_store.write().unwrap();
+        let mut locked_versions = self.versions.write().unwrap();
 
         let mut error_flag = false;
     
         // Check every uid in (write_set U read_set)
         for uid in write_set.union(&read_set) {
             // Check mismatch, in case signal error and break loop
-            if locked_inner.mismatch(old_versions, &uid) {
+            if locked_versions.mismatch(&old_versions, &uid) {
                 error_flag = true;
                 break;
             }
@@ -416,7 +424,7 @@ impl VersionedInterpreter {
             },
             false => {
                 // Apply changes to shared copy
-                locked_inner.apply_operations(op_vector);
+                self.apply_operations(&mut locked_store, &mut locked_versions, op_vector);
                 return Ok(());
             },
         }
@@ -426,7 +434,7 @@ impl VersionedInterpreter {
         &mut self,
         request: &Request,
         result: EvaluationResult,
-        mut interpreter_copy: InnerInterpreter,
+        old_versions: VersionHashmap,
         read_set: HashSet<EntityUID>,
         entities: &Entities,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -434,15 +442,14 @@ impl VersionedInterpreter {
 
         let mut write_set: HashSet<EntityUID> = HashSet::new();
         let mut op_vector: Vec<StoreOp> = Vec::new();
-        let old_versions = interpreter_copy.get_versions();
 
-        create_justification(result.clone(), &mut interpreter_copy.entity_store);
+        // create_justification(result.clone(), &mut interpreter_copy.entity_store);
         // let entities = interpreter_copy.entity_store.clone().into_entities();
         let evaluator = Evaluator::new(request.clone(), &entities, Extensions::none());
         let env = SlotEnv::new();
         
         // TODO: check if there could be problems by leaving self
-        // instead of self_copy (in actual implementation commands
+        // instead of self_copy (in actual implementation commandss
         // are taken from Arc inside versioned interpreter)
         let root_cmd = match result.decision {
             Decision::Allow => &*self.commands.on_allow,
@@ -529,9 +536,9 @@ impl VersionedInterpreter {
         }
 
         //
-        remove_jusification(&mut interpreter_copy.entity_store);
+        // remove_jusification(&mut interpreter_copy.entity_store);
 
         // Validate + write entity_store (if no errors raise during validation)
-        self.validate(&old_versions, op_vector, write_set, read_set)         
+        self.validate(old_versions, op_vector, write_set, read_set)         
     }
 }

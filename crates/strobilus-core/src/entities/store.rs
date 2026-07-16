@@ -212,3 +212,15 @@ impl EntityStore for BasicEntityStore {
     }
     */
 }
+
+
+pub trait OptimisticEntityStore {
+    fn get_entities_ref(&self) -> &Entities;
+}
+
+impl OptimisticEntityStore for BasicEntityStore {
+    fn get_entities_ref(&self) -> &Entities {
+        &self.inner
+    }
+}
+
