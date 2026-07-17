@@ -181,20 +181,17 @@ impl OptimisticAuthorizer {
 
         // Clone Arc containing the store and get the reference to the inner Entities
         let store_arc = self.interpreter.get_entity_store_arc();
-        let entities_ref = {
-            let locked_store = store_arc.read().unwrap();
-            locked_store.get_entities_ref()
-        };
+        let entities_ref = store_arc.get_entities_ref();
 
         // This has to be done to ensure the code compiles, otherwise when calling execute
         // both a mutable (read_set_guard) and immutable (execute) reference to the same
         // object is taken
         let (result, read_set) = {
             // Instantiate the ReadSetGuard to clean task read set even in case of panic
-            let _read_set_guard = ReadSetGuard::new(&entities_ref);
+            let _read_set_guard = ReadSetGuard::new(entities_ref);
 
             // Evaluate request on the entities
-            let result = self.engine.evaluate(request, &entities_ref)?;
+            let result = self.engine.evaluate(request, entities_ref)?;
 
             // Extract read set after evaluation
             let read_set = entities_ref.extract_read_set();
@@ -207,7 +204,7 @@ impl OptimisticAuthorizer {
         // thread::sleep(Duration::from_millis(200));
 
         // Execute the obligations on the entity store
-        let return_value = match self.interpreter.execute(request, result.clone(), old_versions, read_set, &entities_ref) {
+        let return_value = match self.interpreter.execute(request, result.clone(), old_versions, read_set, entities_ref) {
             Ok(()) => Ok(result.decision),
             Err(e) => Err(e)
         };
