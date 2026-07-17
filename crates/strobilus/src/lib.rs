@@ -160,7 +160,8 @@ impl OptimisticWrapper {
 // ---------------------------------- MUTEX AUTHORIZER IMPLEMENTATION ----------------------------------
 
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use parking_lot::RwLock;
 
 #[derive(Clone)]
 pub struct PessimisticAuthorizer {
@@ -179,11 +180,11 @@ impl PessimisticAuthorizer {
     }
 
     pub fn is_authorized(&mut self, request: Request) -> Decision {
-        self.authorizer.write().unwrap().is_authorized(request)
+        self.authorizer.write().is_authorized(request)
     }
 
     pub fn to_json_value(&self) -> Result<serde_json::Value, cedar_policy_core::entities::err::EntitiesError> {
-        self.authorizer.read().unwrap().to_json_value()
+        self.authorizer.read().to_json_value()
     }
 }
 

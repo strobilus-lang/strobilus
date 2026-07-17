@@ -26,6 +26,7 @@ tsify = { version = "0.4.5", optional = true }
 wasm-bindgen = { version = "0.2.97", optional = true }
 semver = "1.0.26"
 lazy_static = "1.5.0"
+parking_lot = "0.12.5"
 
 [features]
 symbolic = []
