@@ -150,6 +150,7 @@ impl PolicyEngine {
 
 use crate::interpreter::VersionedInterpreter;
 use crate::entities::store::OptimisticEntityStore;
+use tokio::time::*;
 
 #[derive(Debug, Clone)]
 pub struct OptimisticAuthorizer {
@@ -177,7 +178,9 @@ impl OptimisticAuthorizer {
     ) -> Result<Decision, Box<dyn std::error::Error>> {
         
         // Clone the Version Hashmap when starting transaction
+        // let before = Instant::now();
         let old_versions = self.interpreter.get_versions();
+        // print_task_id(&format!("Time taken to clone version hashmap: {} micros", before.elapsed().as_micros()));
 
         // Clone Arc containing the store and get the reference to the inner Entities
         let store_arc = self.interpreter.get_entity_store_arc();
@@ -191,7 +194,9 @@ impl OptimisticAuthorizer {
             let _read_set_guard = ReadSetGuard::new(entities_ref);
 
             // Evaluate request on the entities
+            // let before = Instant::now();
             let result = self.engine.evaluate(request, entities_ref)?;
+            // print_task_id(&format!("Time taken to evaluate: {} micros", before.elapsed().as_micros()));
 
             // Extract read set after evaluation
             let read_set = entities_ref.extract_read_set();
@@ -204,10 +209,12 @@ impl OptimisticAuthorizer {
         // thread::sleep(Duration::from_millis(200));
 
         // Execute the obligations on the entity store
+        // let before = Instant::now();
         let return_value = match self.interpreter.execute(request, result.clone(), old_versions, read_set, entities_ref) {
             Ok(()) => Ok(result.decision),
             Err(e) => Err(e)
         };
+        // print_task_id(&format!("Time taken to execute: {} micros", before.elapsed().as_micros()));
 
         return_value
     }
