@@ -271,13 +271,13 @@ pub enum StoreOp {
 
 #[derive(Debug, Clone)]
 pub struct VersionHashmap {
-    map: HashMap<EntityUID, u64>,
+    map: HashMap<Arc<EntityUID>, u64>,
 }
 
 impl VersionHashmap {
     pub fn new(entities: &Entities) -> Self {
         let mut map = HashMap::new();
-        for e in entities.clone().into_iter() {map.insert(e.uid().clone(), 1);}
+        for e in entities.clone().into_iter() {map.insert(Arc::new(e.uid().clone()), 1);}
         Self{map}
     }
 
@@ -287,7 +287,7 @@ impl VersionHashmap {
     }
 
     /// Extract the whole versions hashmap
-    pub fn get_versions(&self) -> HashMap<EntityUID, u64> {
+    pub fn get_versions(&self) -> HashMap<Arc<EntityUID>, u64> {
         self.map.clone()
     }
 
@@ -298,7 +298,7 @@ impl VersionHashmap {
 
     /// Increase version value for specified uid
     fn increase_version(&mut self, uid: &EntityUID) {
-        self.map.insert(uid.clone(), self.get_version_value(uid) + 1);
+        self.map.insert(Arc::new(uid.clone()), self.get_version_value(uid) + 1);
     }
 
     /// Remove version value for specified uid
@@ -403,8 +403,10 @@ impl VersionedInterpreter {
         write_set: HashSet<EntityUID>,
         read_set: HashSet<EntityUID>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // let before = Instant::now();
         let mut locked_store = self.entity_store.write();
         let mut locked_versions = self.versions.write();
+        // print_task_id(&format!("Time taken to lock store and versions inside validate: {} micros", before.elapsed().as_micros()));
 
         let mut error_flag = false;
     
@@ -544,4 +546,9 @@ impl VersionedInterpreter {
         // Validate + write entity_store (if no errors raise during validation)
         self.validate(old_versions, op_vector, write_set, read_set)         
     }
+}
+
+use tokio::time::Instant;
+pub fn print_task_id(string: &str) {
+    println!("--- TASK {:?}: {}", tokio::task::id(), string);
 }
