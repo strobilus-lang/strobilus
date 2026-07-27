@@ -88,7 +88,7 @@ pub fn parse_obligations_file(path: &str) -> Result<CommandSet, Box<dyn std::err
 
 // ---------------------------------- OPTIMISTIC WRAPPER IMPLEMENTATION ----------------------------------
 
-use rand::Rng;
+use rand::{Rng, rngs::ThreadRng};
 use spin_sleep;
 
 #[derive(Clone)]
@@ -124,7 +124,8 @@ impl OptimisticWrapper {
         let mut attempt: i32 = 1;
         let max_attempt: i32 = 10;
 
-        let sleeper = spin_sleep::SpinSleeper::new(10_000);
+        // let sleeper = spin_sleep::SpinSleeper::new(10_000);
+        // let mut rng = rand::thread_rng();
         
         let mut return_value = Decision::Deny;
         let mut retry_flag = true;
@@ -141,18 +142,17 @@ impl OptimisticWrapper {
                 }
             };
 
-            if retry_flag {
-                let duration = Self::calculate_delay(base_delay, max_delay, attempt);
-                sleeper.sleep(duration);
-                attempt += 1;
-            }
+            // if retry_flag {
+            //     let duration = Self::calculate_delay(&mut rng, base_delay, max_delay, attempt);
+            //     sleeper.sleep(duration);
+            //     attempt += 1;
+            // }
         }
 
         return_value
     }
 
-    fn calculate_delay(base_delay: f64, max_delay: f64, attempt: i32) -> Duration {
-        let mut rng = rand::thread_rng();
+    fn calculate_delay(rng: &mut ThreadRng, base_delay: f64, max_delay: f64, attempt: i32) -> Duration {
         let exp_delay = base_delay * (2_f64.powi(attempt as i32));
         let cap_delay = exp_delay.min(max_delay);
         let delay = rng.gen_range(0.0..=cap_delay).round() as u64;
