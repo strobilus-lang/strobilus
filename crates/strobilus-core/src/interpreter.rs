@@ -397,7 +397,7 @@ impl VersionedInterpreter {
     // Validates the versions of the Entities contained in the local copy
     // against the ones contained in the shared copy
     // If there's no version mismatch apply changes to shared copy
-    fn validate(
+    pub fn validate(
         &self, 
         old_versions: VersionHashmap, 
         op_vector: Vec<StoreOp>,
@@ -441,10 +441,8 @@ impl VersionedInterpreter {
         &mut self,
         request: &Request,
         result: EvaluationResult,
-        old_versions: VersionHashmap,
-        read_set: HashSet<EntityUID>,
         entities: &Entities,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<((Vec<StoreOp>, HashSet<EntityUID>)), Box<dyn std::error::Error>> {
         //
 
         let mut write_set: HashSet<EntityUID> = HashSet::new();
@@ -544,12 +542,12 @@ impl VersionedInterpreter {
         //
         // remove_jusification(&mut interpreter_copy.entity_store);
 
-        // Validate + write entity_store (if no errors raise during validation)
-        self.validate(old_versions, op_vector, write_set, read_set)         
+        Ok((op_vector, write_set))
+             
     }
 }
 
-use tokio::time::Instant;
+
 pub fn print_task_id(string: &str) {
     println!("--- TASK {:?}: {}", tokio::task::id(), string);
 }

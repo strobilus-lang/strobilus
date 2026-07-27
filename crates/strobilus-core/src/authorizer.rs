@@ -210,13 +210,17 @@ impl OptimisticAuthorizer {
 
         // Execute the obligations on the entity store
         // let before = Instant::now();
-        let return_value = match self.interpreter.execute(request, result.clone(), old_versions, read_set, entities_ref) {
-            Ok(()) => Ok(result.decision),
-            Err(e) => Err(e)
-        };
+
+        let (op_vector, write_set) = self.interpreter.execute(request, result.clone(), entities_ref)?;
+
+        drop(store_arc);
+
+        // Validate + write entity_store (if no errors raise during validation)
+        self.interpreter.validate(old_versions, op_vector, write_set, read_set)?;
+
         // print_task_id(&format!("Time taken to execute: {} micros", before.elapsed().as_micros()));
 
-        return_value
+        Ok(result.decision)
     }
 }
 
