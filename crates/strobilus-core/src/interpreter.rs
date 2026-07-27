@@ -362,7 +362,7 @@ impl VersionedInterpreter {
         result: EvaluationResult,
     ) {
         let mutable_store = Arc::make_mut(store_arc);
-        create_justification(result, mutable_store);
+        // create_justification(result, mutable_store);
 
         for operation in op_vector {
             match operation {
@@ -393,7 +393,7 @@ impl VersionedInterpreter {
             };
         }
 
-        remove_jusification(mutable_store);
+        // remove_jusification(mutable_store);
 
     }
 
