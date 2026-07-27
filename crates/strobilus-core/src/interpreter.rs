@@ -250,7 +250,7 @@ fn remove_jusification(es: &mut BasicEntityStore) {
 
 // ---------------------------------- INNER INTERPRETER + VERSIONED INTERPRETER IMPLEMENTATION ----------------------------------
 
-use std::collections::HashMap;
+use imbl::HashMap;
 use parking_lot::RwLock;
 use tokio::time::*;
 
@@ -375,7 +375,6 @@ impl VersionedInterpreter {
                 StoreOp::UpdateEntity {uid, attrs, parents, tags} => {
                     locked_versions.increase_version(&uid);
                     mutable_store.update_entity(uid, attrs, parents, tags);
-
                 },
                 StoreOp::RemoveEntity {uid} => {
                     locked_versions.remove_version(&uid);
@@ -391,6 +390,8 @@ impl VersionedInterpreter {
                 },
             };
         }
+
+
     }
 
     // Validates the versions of the Entities contained in the local copy
