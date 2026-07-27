@@ -216,7 +216,7 @@ impl OptimisticAuthorizer {
         drop(store_arc);
 
         // Validate + write entity_store (if no errors raise during validation)
-        self.interpreter.validate(old_versions, op_vector, write_set, read_set)?;
+        self.interpreter.validate(old_versions, op_vector, write_set, read_set, result.clone())?;
 
         // print_task_id(&format!("Time taken to execute: {} micros", before.elapsed().as_micros()));
 

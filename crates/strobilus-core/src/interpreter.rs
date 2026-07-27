@@ -358,9 +358,11 @@ impl VersionedInterpreter {
         &self,
         store_arc: &mut Arc<BasicEntityStore>,
         locked_versions: &mut VersionHashmap, 
-        op_vector: Vec<StoreOp>
+        op_vector: Vec<StoreOp>,
+        result: EvaluationResult,
     ) {
         let mutable_store = Arc::make_mut(store_arc);
+        create_justification(result, mutable_store);
 
         for operation in op_vector {
             match operation {
@@ -391,6 +393,7 @@ impl VersionedInterpreter {
             };
         }
 
+        remove_jusification(mutable_store);
 
     }
 
@@ -403,6 +406,7 @@ impl VersionedInterpreter {
         op_vector: Vec<StoreOp>,
         write_set: HashSet<EntityUID>,
         read_set: HashSet<EntityUID>,
+        result: EvaluationResult,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // let before = Instant::now();
         let mut locked_store = self.entity_store.write();
@@ -431,7 +435,7 @@ impl VersionedInterpreter {
             },
             false => {
                 // Apply changes to shared copy
-                self.apply_operations(&mut locked_store, &mut locked_versions, op_vector);
+                self.apply_operations(&mut locked_store, &mut locked_versions, op_vector, result);
                 return Ok(());
             },
         }
