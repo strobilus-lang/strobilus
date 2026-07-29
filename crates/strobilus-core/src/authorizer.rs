@@ -168,6 +168,7 @@ impl OptimisticAuthorizer {
     }
 
     /// Extract entities from entities store
+    /// WARNING: internally clones the store, could be very costly
     pub fn entities(self) -> Entities {
         self.interpreter.entity_store()
     }
@@ -178,74 +179,28 @@ impl OptimisticAuthorizer {
     ) -> Result<Decision, Box<dyn std::error::Error>> {
         
         // Clone the Version Hashmap when starting transaction
-        // let before = Instant::now();
         let old_versions = self.interpreter.get_versions();
-        // print_task_id(&format!("Time taken to clone version hashmap: {} micros", before.elapsed().as_micros()));
 
-        // Clone Arc containing the store and get the reference to the inner Entities
-        let store_arc = self.interpreter.get_entity_store_arc();
-        let entities_ref = store_arc.get_entities_ref();
+        // Clone the store and get the reference to the inner Entities
+        let mut store_clone = self.interpreter.get_store_clone();
+        let entities_ref = store_clone.get_entities_ref();
 
-        // This has to be done to ensure the code compiles, otherwise when calling execute
-        // both a mutable (read_set_guard) and immutable (execute) reference to the same
-        // object is taken
-        let (result, read_set) = {
-            // Instantiate the ReadSetGuard to clean task read set even in case of panic
-            let _read_set_guard = ReadSetGuard::new(entities_ref);
+        // Evaluate request on the entities
+        let result = self.engine.evaluate(request, entities_ref)?;
 
-            // Evaluate request on the entities
-            // let before = Instant::now();
-            let result = self.engine.evaluate(request, entities_ref)?;
-            // print_task_id(&format!("Time taken to evaluate: {} micros", before.elapsed().as_micros()));
-
-            // Extract read set after evaluation
-            let read_set = entities_ref.extract_read_set();
-
-            (result, read_set)
-        };
+        // Extract the read set after evaluation
+        let read_set = entities_ref.extract_read_set();
 
         // Insert a delay before entities store is modified to force race condition
         // use std::{time::Duration, thread};
         // thread::sleep(Duration::from_millis(200));
 
-        // Execute the obligations on the entity store
-        // let before = Instant::now();
-
-        let (op_vector, write_set) = self.interpreter.execute(request, result.clone(), entities_ref)?;
-
-        drop(store_arc);
+        // Execute obligations and get both vector of operations and write set
+        let (op_vector, write_set) = self.interpreter.execute(request, result.clone(), &mut store_clone)?;
 
         // Validate + write entity_store (if no errors raise during validation)
         self.interpreter.validate(old_versions, op_vector, write_set, read_set, result.clone())?;
 
-        // print_task_id(&format!("Time taken to execute: {} micros", before.elapsed().as_micros()));
-
         Ok(result.decision)
     }
-}
-
-pub struct ReadSetGuard<'a> {
-    entities: &'a Entities,
-    task_id: tokio::task::Id,
-}
-
-impl<'a> ReadSetGuard<'a> {
-    pub fn new(entities: &'a Entities) -> Self {
-        let task_id = tokio::task::id();
-        entities.clean_map_entry(&task_id);
-        Self {
-            entities, 
-            task_id
-        }
-    }
-}
-
-impl<'a> Drop for ReadSetGuard<'a> {
-    fn drop(&mut self) {
-        self.entities.clean_map_entry(&self.task_id);
-    }
-}
-
-pub fn print_task_id(string: &str) {
-    println!("--- TASK {:?}: {}", tokio::task::id(), string);
 }

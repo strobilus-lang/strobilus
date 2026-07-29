@@ -252,7 +252,7 @@ fn remove_jusification(es: &mut BasicEntityStore) {
 
 use imbl::HashMap;
 use parking_lot::RwLock;
-use tokio::time::*;
+use crate::entities::store::OptimisticEntityStore;
 
 // Enum to classify operations on the Entities store
 pub enum StoreOp {
@@ -308,10 +308,10 @@ impl VersionHashmap {
 
 }
 
-/// Struct that contains InnerInterpreter and Obligations
+/// Struct that contains Entity store, versions hashmap and obligations
 #[derive(Debug, Clone)]
 pub struct VersionedInterpreter {
-    entity_store: Arc<RwLock<Arc<BasicEntityStore>>>,
+    entity_store: Arc<RwLock<BasicEntityStore>>,
     versions: Arc<RwLock<VersionHashmap>>,
     commands: Arc<CommandSet>,
 }
@@ -322,9 +322,8 @@ impl VersionedInterpreter {
         let entity_store = 
             Arc::new(
             RwLock::new(
-            Arc::new(
             BasicEntityStore::new(entities)
-        )));
+        ));
         Self {
             entity_store,
             versions,
@@ -332,74 +331,63 @@ impl VersionedInterpreter {
         }
     }
 
-    // Return the current versions map
+    /// Return the current versions map
     pub fn get_versions(&self) -> VersionHashmap {
         self.versions.read().clone()
     }
 
-    // Get an immutable snapshot of the store
-    pub fn get_entity_store_arc(&self) -> Arc<BasicEntityStore> {
+    /// Get a copy of the entities, consuming the actual store
+    pub fn entity_store(self) -> Entities {
+        self.get_store_clone().into_entities()
+    }
+
+    /// Clones the entities store
+    /// WARNING: MIGHT BE VERY TIME CONSUMING
+    pub fn get_store_clone(&self) -> BasicEntityStore {
         self.entity_store.read().clone()
     }
 
-    // Get a copy of the entities, consuming the actual value
-    // WARNING: MIGHT BE VERY TIME CONSUMING
-    pub fn entity_store(self) -> Entities {
-        let store_clone = {
-            let locked_store = self.entity_store.read();
-            (**locked_store).clone()
-        };
-        store_clone.into_entities()
-    }
-
-    // TODO: should return something?
-    // Applies vector of StoreOp to locked entity store
+    /// Applies vector of StoreOp to locked entity store
     fn apply_operations(
         &self,
-        store_arc: &mut Arc<BasicEntityStore>,
-        locked_versions: &mut VersionHashmap, 
+        entity_store: &mut BasicEntityStore,
+        versions: &mut VersionHashmap, 
         op_vector: Vec<StoreOp>,
         result: EvaluationResult,
     ) {
-        let mutable_store = Arc::make_mut(store_arc);
-        // create_justification(result, mutable_store);
-
         for operation in op_vector {
             match operation {
                 StoreOp::AddParent {child_uid, parent_uid} => {
-                    locked_versions.increase_version(&child_uid);
-                    mutable_store.add_parent(&child_uid, parent_uid);
+                    versions.increase_version(&child_uid);
+                    entity_store.add_parent(&child_uid, parent_uid);
                 },
                 StoreOp::RemoveParent {child_uid, parent_uid} => {
-                    locked_versions.increase_version(&child_uid);
-                    mutable_store.remove_parent(&child_uid, &parent_uid);
+                    versions.increase_version(&child_uid);
+                    entity_store.remove_parent(&child_uid, &parent_uid);
                 },
                 StoreOp::UpdateEntity {uid, attrs, parents, tags} => {
-                    locked_versions.increase_version(&uid);
-                    mutable_store.update_entity(uid, attrs, parents, tags);
+                    versions.increase_version(&uid);
+                    entity_store.update_entity(uid, attrs, parents, tags);
                 },
                 StoreOp::RemoveEntity {uid} => {
-                    locked_versions.remove_version(&uid);
-                    mutable_store.remove_entity(&uid);
+                    versions.remove_version(&uid);
+                    entity_store.remove_entity(&uid);
                 },
                 StoreOp::UpdateAttribute {uid, key, value} => {
-                    locked_versions.increase_version(&uid);
-                    mutable_store.update_attribute(&uid, key, value);
+                    versions.increase_version(&uid);
+                    entity_store.update_attribute(&uid, key, value);
                 },
                 StoreOp::RemoveAttribute {uid, key} => {
-                    locked_versions.increase_version(&uid);
-                    mutable_store.remove_attribute(&uid, &key);
+                    versions.increase_version(&uid);
+                    entity_store.remove_attribute(&uid, &key);
                 },
             };
         }
-
-        // remove_jusification(mutable_store);
-
     }
 
-    // Validates the versions of the Entities contained in the local copy
-    // against the ones contained in the shared copy
-    // If there's no version mismatch apply changes to shared copy
+    /// Validates the versions of the Entities contained in the local copy
+    /// against the ones contained in the shared copy. 
+    /// If there's no version mismatch apply changes to shared copy
     pub fn validate(
         &self, 
         old_versions: VersionHashmap, 
@@ -408,15 +396,12 @@ impl VersionedInterpreter {
         read_set: HashSet<EntityUID>,
         result: EvaluationResult,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // let before = Instant::now();
         let mut locked_store = self.entity_store.write();
         let mut locked_versions = self.versions.write();
-        // print_task_id(&format!("Time taken to lock store and versions inside validate: {} micros", before.elapsed().as_micros()));
-
         let mut error_flag = false;
     
         // Check every uid in (write_set U read_set)
-        for uid in write_set.union(&read_set) {
+        for uid in read_set {
             // Check mismatch, in case signal error and break loop
             if locked_versions.mismatch(&old_versions, &uid) {
                 error_flag = true;
@@ -436,29 +421,29 @@ impl VersionedInterpreter {
             false => {
                 // Apply changes to shared copy
                 self.apply_operations(&mut locked_store, &mut locked_versions, op_vector, result);
-                return Ok(());
+                Ok(())
             },
         }
     }
 
+    /// Executes the obligations on the cloned store, returns the sequence of operations
+    /// and the write set
     pub fn execute(
         &mut self,
         request: &Request,
         result: EvaluationResult,
-        entities: &Entities,
+        store_clone: &mut BasicEntityStore,
     ) -> Result<((Vec<StoreOp>, HashSet<EntityUID>)), Box<dyn std::error::Error>> {
-        //
 
         let mut write_set: HashSet<EntityUID> = HashSet::new();
         let mut op_vector: Vec<StoreOp> = Vec::new();
-
-        // create_justification(result.clone(), &mut interpreter_copy.entity_store);
-        let evaluator = Evaluator::new(request.clone(), entities, Extensions::none());
-        let env = SlotEnv::new();
+        create_justification(result.clone(), store_clone);
         
-        // TODO: check if there could be problems by leaving self
-        // instead of self_copy (in actual implementation commandss
-        // are taken from Arc inside versioned interpreter)
+        let temp_store_clone = store_clone.clone();
+        let entities_ref = temp_store_clone.get_entities_ref();
+        let evaluator = Evaluator::new(request.clone(), entities_ref, Extensions::none());
+        let env = SlotEnv::new();
+
         let root_cmd = match result.decision {
             Decision::Allow => &*self.commands.on_allow,
             Decision::Deny => &*self.commands.on_deny,
@@ -493,6 +478,7 @@ impl VersionedInterpreter {
                     let parent_val = evaluator.interpret(expr_p, &env)?;
                     let child_uid = expect_entity_uid(child_val, "addParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "addParent")?;
+                    store_clone.add_parent(&child_uid, parent_uid.clone());
                     write_set.insert(child_uid.clone());
                     op_vector.push(StoreOp::AddParent{ child_uid, parent_uid });
                 }
@@ -502,6 +488,7 @@ impl VersionedInterpreter {
                     let parent_val = evaluator.interpret(expr_p, &env)?;
                     let child_uid = expect_entity_uid(child_val, "removeParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "removeParent")?;
+                    store_clone.remove_parent(&child_uid, &parent_uid);
                     write_set.insert(child_uid.clone());
                     op_vector.push(StoreOp::RemoveParent { child_uid, parent_uid });
                 }
@@ -513,6 +500,7 @@ impl VersionedInterpreter {
                     let tags_val = evaluator.interpret(tags_e, &env)?;
                     let (uid, attrs, ancestors, tags) =
                         collect_update_entity_args(uid_val, attrs_val, anc_val, tags_val)?;
+                    store_clone.update_entity(uid.clone(), attrs.clone(), ancestors.clone(), tags.clone());
                     write_set.insert(uid.clone());
                     op_vector.push(StoreOp::UpdateEntity { uid, attrs, parents: ancestors, tags });
                 }
@@ -520,6 +508,7 @@ impl VersionedInterpreter {
                 CommandKind::RemoveEntity(expr) => {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeEntity")?;
+                    store_clone.remove_entity(&uid);
                     write_set.insert(uid.clone());
                     op_vector.push(StoreOp::RemoveEntity { uid });
                 }
@@ -528,6 +517,7 @@ impl VersionedInterpreter {
                     let v1 = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v1, "updateAttribute")?;
                     let v2 = evaluator.interpret(value_expr, &env)?;
+                    store_clone.update_attribute(&uid, attr.into(), v2.clone());
                     write_set.insert(uid.clone());
                     op_vector.push(StoreOp::UpdateAttribute { uid, key: attr.into(), value: v2 });
                 }
@@ -535,6 +525,7 @@ impl VersionedInterpreter {
                 CommandKind::RemoveAttribute(expr, attr) => {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeAttribute")?;
+                    store_clone.remove_attribute(&uid, &attr.into());
                     write_set.insert(uid.clone());
                     op_vector.push(StoreOp::RemoveAttribute { uid, key: attr.into() });
                 }
@@ -543,15 +534,8 @@ impl VersionedInterpreter {
             }
         }
 
-        //
-        // remove_jusification(&mut interpreter_copy.entity_store);
+        remove_jusification(store_clone);
 
-        Ok((op_vector, write_set))
-             
+        Ok((op_vector, write_set))    
     }
-}
-
-
-pub fn print_task_id(string: &str) {
-    println!("--- TASK {:?}: {}", tokio::task::id(), string);
 }
