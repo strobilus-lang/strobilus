@@ -173,6 +173,8 @@ impl OptimisticAuthorizer {
         self.interpreter.entity_store()
     }
 
+
+    /// Evaluate request on the store in an optimistic way
     pub fn is_authorized(
         &mut self,
         request: &Request,
@@ -196,10 +198,32 @@ impl OptimisticAuthorizer {
         // thread::sleep(Duration::from_millis(200));
 
         // Execute obligations and get both vector of operations and write set
-        let (op_vector, write_set) = self.interpreter.execute(request, result.clone(), &mut store_clone)?;
+        let (op_vector, write_set) = self.interpreter.execute(request, result.clone(), &mut store_clone, true)?;
 
         // Validate + write entity_store (if no errors raise during validation)
         self.interpreter.validate(old_versions, op_vector, write_set, read_set, result.clone())?;
+
+        Ok(result.decision)
+    }
+
+    
+    /// Take a write lock and executes a transaction. 
+    /// Used in the worst case to prevent starvation of a single transaction.
+    pub fn is_authorized_locked(
+        &mut self,
+        request: &Request,
+    ) -> Result<Decision, Box<dyn std::error::Error>> {
+        // Get locked entities store at start
+        let mut locked_store= self.interpreter.get_locked_store();
+
+        // Clone the store and get the reference to the inner Entities
+        let entities_ref = locked_store.get_entities_ref();
+
+        // Evaluate request on the entities
+        let result = self.engine.evaluate(request, entities_ref)?;
+
+        // Execute obligations and get both vector of operations and write set
+        self.interpreter.execute(request, result.clone(), &mut locked_store, false)?;
 
         Ok(result.decision)
     }
