@@ -119,15 +119,23 @@ impl OptimisticWrapper {
     }
 
     pub fn is_authorized(&mut self, request: Request) -> Decision { 
-        let mut attempt: i32 = 1;
-        let max_attempt: i32 = 10;
+        let mut attempt= 1;
+        let max_attempt= 10;
         
-        let mut return_value = Decision::Deny;
+        let mut decision = Decision::Deny;
         let mut retry_flag = true;
         
         while retry_flag {
             retry_flag = false;
-            return_value = match self.0.is_authorized(&request.0){
+            
+            // If max number of attempt without transaction completing is reached
+            // a lock is taken to ensure transaction completes without problems
+            let result = match attempt < max_attempt {
+                true => self.0.is_authorized(&request.0),
+                false => self.0.is_authorized_locked(&request.0),
+            };
+
+            decision = match result {
                 Ok(decision) => decision, 
                 Err(_) => {
                     // print_thread_id("RETRY");
@@ -135,9 +143,11 @@ impl OptimisticWrapper {
                     Decision::Deny
                 }
             };
+            
+            attempt += 1;
         }
 
-        return_value
+        decision
     }
 }
 
