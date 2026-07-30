@@ -347,6 +347,12 @@ impl VersionedInterpreter {
         self.entity_store.read().clone()
     }
 
+    /// Returns a locked version of the entity store 
+    pub fn get_locked_store(&self) 
+    -> parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, BasicEntityStore> {
+        self.entity_store.write()
+    }
+
     /// Applies vector of StoreOp to locked entity store
     fn apply_operations(
         &self,
@@ -427,16 +433,19 @@ impl VersionedInterpreter {
     }
 
     /// Executes the obligations on the cloned store, returns the sequence of operations
-    /// and the write set
+    /// and the write set. If record operations is false, obligations are directly applied to
+    /// store_clone and returned write set and op_vector are empty 
     pub fn execute(
-        &mut self,
+        &self,
         request: &Request,
         result: EvaluationResult,
         store_clone: &mut BasicEntityStore,
-    ) -> Result<((Vec<StoreOp>, HashSet<EntityUID>)), Box<dyn std::error::Error>> {
+        record_operations: bool,
+    ) -> Result<(Vec<StoreOp>, HashSet<EntityUID>), Box<dyn std::error::Error>> {
 
         let mut write_set: HashSet<EntityUID> = HashSet::new();
         let mut op_vector: Vec<StoreOp> = Vec::new();
+        
         create_justification(result.clone(), store_clone);
         
         let temp_store_clone = store_clone.clone();
@@ -479,8 +488,10 @@ impl VersionedInterpreter {
                     let child_uid = expect_entity_uid(child_val, "addParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "addParent")?;
                     store_clone.add_parent(&child_uid, parent_uid.clone());
-                    write_set.insert(child_uid.clone());
-                    op_vector.push(StoreOp::AddParent{ child_uid, parent_uid });
+                    if record_operations {
+                        write_set.insert(child_uid.clone());
+                        op_vector.push(StoreOp::AddParent{ child_uid, parent_uid });
+                    }
                 }
 
                 CommandKind::RemoveParent(expr_c, expr_p) => {
@@ -489,8 +500,10 @@ impl VersionedInterpreter {
                     let child_uid = expect_entity_uid(child_val, "removeParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "removeParent")?;
                     store_clone.remove_parent(&child_uid, &parent_uid);
-                    write_set.insert(child_uid.clone());
-                    op_vector.push(StoreOp::RemoveParent { child_uid, parent_uid });
+                    if record_operations {
+                        write_set.insert(child_uid.clone());
+                        op_vector.push(StoreOp::RemoveParent { child_uid, parent_uid });
+                    }
                 }
 
                 CommandKind::UpdateEntity(uid_e, attrs_e, anc_e, tags_e) => {
@@ -501,16 +514,20 @@ impl VersionedInterpreter {
                     let (uid, attrs, ancestors, tags) =
                         collect_update_entity_args(uid_val, attrs_val, anc_val, tags_val)?;
                     store_clone.update_entity(uid.clone(), attrs.clone(), ancestors.clone(), tags.clone());
-                    write_set.insert(uid.clone());
-                    op_vector.push(StoreOp::UpdateEntity { uid, attrs, parents: ancestors, tags });
+                    if record_operations {
+                        write_set.insert(uid.clone());
+                        op_vector.push(StoreOp::UpdateEntity { uid, attrs, parents: ancestors, tags });
+                    }
                 }
 
                 CommandKind::RemoveEntity(expr) => {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeEntity")?;
                     store_clone.remove_entity(&uid);
-                    write_set.insert(uid.clone());
-                    op_vector.push(StoreOp::RemoveEntity { uid });
+                    if record_operations {
+                        write_set.insert(uid.clone());
+                        op_vector.push(StoreOp::RemoveEntity { uid });
+                    }
                 }
 
                 CommandKind::UpdateAttribute(expr, attr, value_expr) => {
@@ -518,16 +535,20 @@ impl VersionedInterpreter {
                     let uid = expect_entity_uid(v1, "updateAttribute")?;
                     let v2 = evaluator.interpret(value_expr, &env)?;
                     store_clone.update_attribute(&uid, attr.into(), v2.clone());
-                    write_set.insert(uid.clone());
-                    op_vector.push(StoreOp::UpdateAttribute { uid, key: attr.into(), value: v2 });
+                    if record_operations {
+                        write_set.insert(uid.clone());
+                        op_vector.push(StoreOp::UpdateAttribute { uid, key: attr.into(), value: v2 });
+                    }
                 }
 
                 CommandKind::RemoveAttribute(expr, attr) => {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeAttribute")?;
                     store_clone.remove_attribute(&uid, &attr.into());
-                    write_set.insert(uid.clone());
-                    op_vector.push(StoreOp::RemoveAttribute { uid, key: attr.into() });
+                    if record_operations {
+                        write_set.insert(uid.clone());
+                        op_vector.push(StoreOp::RemoveAttribute { uid, key: attr.into() });
+                    }
                 }
 
                 CommandKind::Skip => {}
