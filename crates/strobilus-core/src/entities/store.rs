@@ -213,7 +213,8 @@ impl EntityStore for BasicEntityStore {
     */
 }
 
-
+/// Trait to extend the BasicEntityStore with the ability
+/// to return a reference to the inner entities
 pub trait OptimisticEntityStore {
     fn get_entities_ref(&self) -> &Entities;
 }

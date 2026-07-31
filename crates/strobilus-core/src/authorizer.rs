@@ -150,7 +150,6 @@ impl PolicyEngine {
 
 use crate::interpreter::VersionedInterpreter;
 use crate::entities::store::OptimisticEntityStore;
-use tokio::time::*;
 
 #[derive(Debug, Clone)]
 pub struct OptimisticAuthorizer {
