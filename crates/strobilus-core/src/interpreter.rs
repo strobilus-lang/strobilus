@@ -406,7 +406,7 @@ impl VersionedInterpreter {
         let mut locked_versions = self.versions.write();
         let mut error_flag = false;
     
-        // Check every uid in (write_set U read_set)
+        // Check every uid in read_set
         for uid in read_set {
             // Check mismatch, in case signal error and break loop
             if locked_versions.mismatch(&old_versions, &uid) {
