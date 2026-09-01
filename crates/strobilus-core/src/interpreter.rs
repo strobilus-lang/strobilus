@@ -303,9 +303,10 @@ impl VersionHashmap {
         self.map.insert(Arc::new(uid.clone()), self.get_version_value(uid) + 1);
     }
 
-    /// Remove version value for specified uid
-    fn remove_version(&mut self, uid: &EntityUID) {
-        self.map.remove(uid);
+    fn increase_version_bulk(&mut self, write_set: HashSet<EntityUID>) {
+        for uid in write_set{
+            self.increase_version(&uid);
+        }
     }
 
 }
@@ -360,8 +361,7 @@ impl VersionedInterpreter {
         &self,
         entity_store: &mut BasicEntityStore,
         versions: &mut VersionHashmap, 
-        op_vector: Vec<StoreOp>,
-        result: EvaluationResult,
+        op_vector: Vec<StoreOp>
     ) {
         for operation in op_vector {
             match operation {
@@ -378,7 +378,8 @@ impl VersionedInterpreter {
                     entity_store.update_entity(uid, attrs, parents, tags);
                 },
                 StoreOp::RemoveEntity {uid} => {
-                    versions.remove_version(&uid);
+                    // Version number is increased to avoid ABA problem
+                    versions.increase_version(&uid);
                     entity_store.remove_entity(&uid);
                 },
                 StoreOp::UpdateAttribute {uid, key, value} => {
@@ -400,9 +401,7 @@ impl VersionedInterpreter {
         &self, 
         old_versions: VersionHashmap, 
         op_vector: Vec<StoreOp>,
-        write_set: HashSet<EntityUID>,
-        read_set: HashSet<EntityUID>,
-        result: EvaluationResult,
+        read_set: HashSet<EntityUID>
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut locked_store = self.entity_store.write();
         let mut locked_versions = self.versions.write();
@@ -428,7 +427,7 @@ impl VersionedInterpreter {
             },
             false => {
                 // Apply changes to shared copy
-                self.apply_operations(&mut locked_store, &mut locked_versions, op_vector, result);
+                self.apply_operations(&mut locked_store, &mut locked_versions, op_vector);
                 Ok(())
             },
         }
@@ -443,7 +442,7 @@ impl VersionedInterpreter {
         result: EvaluationResult,
         store_clone: &mut BasicEntityStore,
         record_operations: bool,
-    ) -> Result<(Vec<StoreOp>, HashSet<EntityUID>, HashSet<EntityUID>), Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<StoreOp>, HashSet<EntityUID>), Box<dyn std::error::Error>> {
 
         let mut write_set: HashSet<EntityUID> = HashSet::new();
         let mut op_vector: Vec<StoreOp> = Vec::new();
@@ -490,8 +489,8 @@ impl VersionedInterpreter {
                     let child_uid = expect_entity_uid(child_val, "addParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "addParent")?;
                     store_clone.add_parent(&child_uid, parent_uid.clone());
+                    write_set.insert(child_uid.clone());
                     if record_operations {
-                        write_set.insert(child_uid.clone());
                         op_vector.push(StoreOp::AddParent{ child_uid, parent_uid });
                     }
                 }
@@ -502,8 +501,8 @@ impl VersionedInterpreter {
                     let child_uid = expect_entity_uid(child_val, "removeParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "removeParent")?;
                     store_clone.remove_parent(&child_uid, &parent_uid);
+                    write_set.insert(child_uid.clone());
                     if record_operations {
-                        write_set.insert(child_uid.clone());
                         op_vector.push(StoreOp::RemoveParent { child_uid, parent_uid });
                     }
                 }
@@ -516,8 +515,8 @@ impl VersionedInterpreter {
                     let (uid, attrs, ancestors, tags) =
                         collect_update_entity_args(uid_val, attrs_val, anc_val, tags_val)?;
                     store_clone.update_entity(uid.clone(), attrs.clone(), ancestors.clone(), tags.clone());
+                    write_set.insert(uid.clone());
                     if record_operations {
-                        write_set.insert(uid.clone());
                         op_vector.push(StoreOp::UpdateEntity { uid, attrs, parents: ancestors, tags });
                     }
                 }
@@ -526,8 +525,8 @@ impl VersionedInterpreter {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeEntity")?;
                     store_clone.remove_entity(&uid);
+                    write_set.insert(uid.clone());
                     if record_operations {
-                        write_set.insert(uid.clone());
                         op_vector.push(StoreOp::RemoveEntity { uid });
                     }
                 }
@@ -537,8 +536,8 @@ impl VersionedInterpreter {
                     let uid = expect_entity_uid(v1, "updateAttribute")?;
                     let v2 = evaluator.interpret(value_expr, &env)?;
                     store_clone.update_attribute(&uid, attr.into(), v2.clone());
+                    write_set.insert(uid.clone());
                     if record_operations {
-                        write_set.insert(uid.clone());
                         op_vector.push(StoreOp::UpdateAttribute { uid, key: attr.into(), value: v2 });
                     }
                 }
@@ -547,8 +546,8 @@ impl VersionedInterpreter {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeAttribute")?;
                     store_clone.remove_attribute(&uid, &attr.into());
+                    write_set.insert(uid.clone());
                     if record_operations {
-                        write_set.insert(uid.clone());
                         op_vector.push(StoreOp::RemoveAttribute { uid, key: attr.into() });
                     }
                 }
@@ -559,8 +558,17 @@ impl VersionedInterpreter {
 
         remove_jusification(store_clone);
 
+        // Done only in case of locked execution of the request
+        if !record_operations {
+            // Increase the version numbers for all written entities
+            let mut versions = self.versions.write();
+            versions.increase_version_bulk(write_set.clone());
+            // Empty the read set to avoid polluting it
+            store_clone.get_entities_ref().empty_read_set();
+        }
+
         let read_set_partial = entities_ref.extract_read_set();
 
-        Ok((op_vector, write_set, read_set_partial))    
+        Ok((op_vector, read_set_partial))    
     }
 }
