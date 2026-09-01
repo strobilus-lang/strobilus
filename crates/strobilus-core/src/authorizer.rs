@@ -197,13 +197,13 @@ impl OptimisticAuthorizer {
         // thread::sleep(Duration::from_millis(200));
 
         // Execute obligations and get vector of operations, write set, and partial read set
-        let (op_vector, write_set, read_set_partial) = self.interpreter.execute(request, result.clone(), &mut store_clone, true)?;
+        let (op_vector, read_set_partial) = self.interpreter.execute(request, result.clone(), &mut store_clone, true)?;
 
         // Extends the read set with the Entities accessed during obligation evaluation by the Evaluator
         read_set.extend(read_set_partial);
 
         // Validate + write entity_store (if no errors raise during validation)
-        self.interpreter.validate(old_versions, op_vector, write_set, read_set, result.clone())?;
+        self.interpreter.validate(old_versions, op_vector, read_set)?;
 
         Ok(result.decision)
     }
@@ -223,6 +223,9 @@ impl OptimisticAuthorizer {
 
         // Evaluate request on the entities
         let result = self.engine.evaluate(request, entities_ref)?;
+
+        // Empty the read set to avoid polluting it
+        entities_ref.empty_read_set();
 
         // Execute obligations and get both vector of operations and write set
         self.interpreter.execute(request, result.clone(), &mut locked_store, false)?;
