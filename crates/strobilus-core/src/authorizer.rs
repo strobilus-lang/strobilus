@@ -190,14 +190,17 @@ impl OptimisticAuthorizer {
         let result = self.engine.evaluate(request, entities_ref)?;
 
         // Extract the read set after evaluation
-        let read_set = entities_ref.extract_read_set();
+        let mut read_set = entities_ref.extract_read_set();
 
         // Insert a delay before entities store is modified to force race condition
         // use std::{time::Duration, thread};
         // thread::sleep(Duration::from_millis(200));
 
-        // Execute obligations and get both vector of operations and write set
-        let (op_vector, write_set) = self.interpreter.execute(request, result.clone(), &mut store_clone, true)?;
+        // Execute obligations and get vector of operations, write set, and partial read set
+        let (op_vector, write_set, read_set_partial) = self.interpreter.execute(request, result.clone(), &mut store_clone, true)?;
+
+        // Extends the read set with the Entities accessed during obligation evaluation by the Evaluator
+        read_set.extend(read_set_partial);
 
         // Validate + write entity_store (if no errors raise during validation)
         self.interpreter.validate(old_versions, op_vector, write_set, read_set, result.clone())?;

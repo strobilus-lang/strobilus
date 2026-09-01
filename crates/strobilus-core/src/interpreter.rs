@@ -292,6 +292,8 @@ impl VersionHashmap {
     }
 
     /// For a specified uid, checks that actual version and old version corresponds
+    /// Needed to operate like this because otherwise a new entity created by two different transaction
+    /// would cause a lost update
     fn mismatch(&self, old_versions: &VersionHashmap, uid: &EntityUID) -> bool {
         old_versions.map.get(uid).copied().unwrap_or(0) != self.get_version_value(uid)
     }
@@ -441,7 +443,7 @@ impl VersionedInterpreter {
         result: EvaluationResult,
         store_clone: &mut BasicEntityStore,
         record_operations: bool,
-    ) -> Result<(Vec<StoreOp>, HashSet<EntityUID>), Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<StoreOp>, HashSet<EntityUID>, HashSet<EntityUID>), Box<dyn std::error::Error>> {
 
         let mut write_set: HashSet<EntityUID> = HashSet::new();
         let mut op_vector: Vec<StoreOp> = Vec::new();
@@ -557,6 +559,8 @@ impl VersionedInterpreter {
 
         remove_jusification(store_clone);
 
-        Ok((op_vector, write_set))    
+        let read_set_partial = entities_ref.extract_read_set();
+
+        Ok((op_vector, write_set, read_set_partial))    
     }
 }
