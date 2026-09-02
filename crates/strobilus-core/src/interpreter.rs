@@ -253,6 +253,7 @@ fn remove_jusification(es: &mut BasicEntityStore) {
 use imbl::HashMap;
 use parking_lot::RwLock;
 use crate::entities::store::OptimisticEntityStore;
+use crate::authorizer::RetryableValidationError;
 
 // Enum to classify operations on the Entities store
 pub enum StoreOp {
@@ -416,21 +417,15 @@ impl VersionedInterpreter {
             }
         }  
 
-        // Check state of error_flag, if true return Error, otherwise Ok(())
-        match error_flag {
-            true => {
-                // TODO: Should I return where the error was (what originates the mismatch) ?
-                return Err(Box::new(std::io::Error::new(
-                                std::io::ErrorKind::InvalidData,
-                                "Mismatch during transaction validation",
-                )));
-            },
-            false => {
-                // Apply changes to shared copy
-                self.apply_operations(&mut locked_store, &mut locked_versions, op_vector);
-                Ok(())
-            },
+        // Check state of error_flag, if true return Error
+        if error_flag {
+                return Err(Box::new(RetryableValidationError));
         }
+        
+        // Apply changes to shared copy
+        self.apply_operations(&mut locked_store, &mut locked_versions, op_vector);
+        
+        Ok(())
     }
 
     /// Executes the obligations on the cloned store, returns the sequence of operations

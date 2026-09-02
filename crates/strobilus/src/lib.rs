@@ -130,18 +130,18 @@ impl OptimisticWrapper {
             
             // If max number of attempt without transaction completing is reached
             // a lock is taken to ensure transaction completes without problems
-            let result = match attempt < max_attempt {
+            let result = match attempt <= max_attempt {
                 true => self.0.is_authorized(&request.0),
                 false => self.0.is_authorized_locked(&request.0),
             };
 
             decision = match result {
-                Ok(decision) => decision, 
-                Err(_) => {
-                    // print_thread_id("RETRY");
+                Ok(decision) => decision,
+                Err(e) if e.is::<authorizer::RetryableValidationError>() => {
                     retry_flag = true;
                     Decision::Deny
                 }
+                Err(_) => Decision::Deny
             };
             
             attempt += 1;

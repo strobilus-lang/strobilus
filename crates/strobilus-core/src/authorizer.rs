@@ -150,6 +150,7 @@ impl PolicyEngine {
 
 use crate::interpreter::VersionedInterpreter;
 use crate::entities::store::OptimisticEntityStore;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct OptimisticAuthorizer {
@@ -233,3 +234,16 @@ impl OptimisticAuthorizer {
         Ok(result.decision)
     }
 }
+
+
+// Struct added to differentiate validation error from other types
+#[derive(Debug)]
+pub struct RetryableValidationError;
+
+impl fmt::Display for RetryableValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "transaction validation failed; the transaction can be retried")
+    }
+}
+
+impl std::error::Error for RetryableValidationError {}
