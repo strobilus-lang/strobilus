@@ -433,21 +433,19 @@ impl VersionedInterpreter {
     }
 
     /// Executes the obligations on the cloned store, returns the sequence of operations
-    /// and the write set. If record operations is false, obligations are directly applied to
-    /// store_clone and returned write set and op_vector are empty 
+    /// the partial read set. 
     pub fn execute(
         &self,
         request: &Request,
         result: EvaluationResult,
-        store_clone: &mut BasicEntityStore,
+        store_clone: &mut BasicEntityStore
     ) -> Result<(Vec<StoreOp>, HashSet<EntityUID>), Box<dyn std::error::Error>> {
 
         let mut op_vector: Vec<StoreOp> = Vec::new();
         
         create_justification(result.clone(), store_clone);
         
-        let temp_store_clone = store_clone.clone();
-        let entities_ref = temp_store_clone.get_entities_ref();
+        let entities_ref = store_clone.get_entities_ref();
         let evaluator = Evaluator::new(request.clone(), entities_ref, Extensions::none());
         let env = SlotEnv::new();
 
@@ -485,7 +483,6 @@ impl VersionedInterpreter {
                     let parent_val = evaluator.interpret(expr_p, &env)?;
                     let child_uid = expect_entity_uid(child_val, "addParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "addParent")?;
-                    store_clone.add_parent(&child_uid, parent_uid.clone());
                     op_vector.push(StoreOp::AddParent{ child_uid, parent_uid });
                 }
 
@@ -494,7 +491,6 @@ impl VersionedInterpreter {
                     let parent_val = evaluator.interpret(expr_p, &env)?;
                     let child_uid = expect_entity_uid(child_val, "removeParent")?;
                     let parent_uid = expect_entity_uid(parent_val, "removeParent")?;
-                    store_clone.remove_parent(&child_uid, &parent_uid);
                     op_vector.push(StoreOp::RemoveParent { child_uid, parent_uid });
                 }
 
@@ -505,14 +501,12 @@ impl VersionedInterpreter {
                     let tags_val = evaluator.interpret(tags_e, &env)?;
                     let (uid, attrs, ancestors, tags) =
                         collect_update_entity_args(uid_val, attrs_val, anc_val, tags_val)?;
-                    store_clone.update_entity(uid.clone(), attrs.clone(), ancestors.clone(), tags.clone());
                     op_vector.push(StoreOp::UpdateEntity { uid, attrs, parents: ancestors, tags });
                 }
 
                 CommandKind::RemoveEntity(expr) => {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeEntity")?;
-                    store_clone.remove_entity(&uid);
                     op_vector.push(StoreOp::RemoveEntity { uid });
                 }
 
@@ -520,14 +514,12 @@ impl VersionedInterpreter {
                     let v1 = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v1, "updateAttribute")?;
                     let v2 = evaluator.interpret(value_expr, &env)?;
-                    store_clone.update_attribute(&uid, attr.into(), v2.clone());
                     op_vector.push(StoreOp::UpdateAttribute { uid, key: attr.into(), value: v2 });
                 }
 
                 CommandKind::RemoveAttribute(expr, attr) => {
                     let v = evaluator.interpret(expr, &env)?;
                     let uid = expect_entity_uid(v, "removeAttribute")?;
-                    store_clone.remove_attribute(&uid, &attr.into());
                     op_vector.push(StoreOp::RemoveAttribute { uid, key: attr.into() });
                 }
 
@@ -538,7 +530,7 @@ impl VersionedInterpreter {
         remove_jusification(store_clone);
 
         // Extract the read set from the ref used in evaluation
-        let read_set_partial = entities_ref.extract_read_set();
+        let read_set_partial = store_clone.get_entities_ref().extract_read_set();
 
         // Empty the read set to avoid polluting it
         store_clone.get_entities_ref().empty_read_set();
