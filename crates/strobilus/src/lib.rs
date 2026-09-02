@@ -16,8 +16,6 @@
  */
 
 mod api;
-use std::time::Duration;
-
 pub use api::*;
 
 pub use strobilus_core::ast::CommandSet;
@@ -87,9 +85,6 @@ pub fn parse_obligations_file(path: &str) -> Result<CommandSet, Box<dyn std::err
 
 
 // ---------------------------------- OPTIMISTIC WRAPPER IMPLEMENTATION ----------------------------------
-
-use rand::{Rng, rngs::ThreadRng};
-use spin_sleep;
 
 #[derive(Clone)]
 pub struct OptimisticWrapper (authorizer::OptimisticAuthorizer);
