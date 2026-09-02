@@ -198,7 +198,7 @@ impl OptimisticAuthorizer {
         // thread::sleep(Duration::from_millis(200));
 
         // Execute obligations and get vector of operations, write set, and partial read set
-        let (op_vector, read_set_partial) = self.interpreter.execute(request, result.clone(), &mut store_clone, true)?;
+        let (op_vector, read_set_partial) = self.interpreter.execute(request, result.clone(), &mut store_clone)?;
 
         // Extends the read set with the Entities accessed during obligation evaluation by the Evaluator
         read_set.extend(read_set_partial);
@@ -216,8 +216,10 @@ impl OptimisticAuthorizer {
         &mut self,
         request: &Request,
     ) -> Result<Decision, Box<dyn std::error::Error>> {
-        // Get locked entities store at start
+        // Get locked entities store and locked version hashmap at start
+        // They are kept during request execution to create the critical section
         let mut locked_store= self.interpreter.get_locked_store();
+        let mut locked_versions = self.interpreter.get_locked_versions();
 
         // Clone the store and get the reference to the inner Entities
         let entities_ref = locked_store.get_entities_ref();
@@ -225,11 +227,11 @@ impl OptimisticAuthorizer {
         // Evaluate request on the entities
         let result = self.engine.evaluate(request, entities_ref)?;
 
-        // Empty the read set to avoid polluting it
-        entities_ref.empty_read_set();
-
         // Execute obligations and get both vector of operations and write set
-        self.interpreter.execute(request, result.clone(), &mut locked_store, false)?;
+        let (op_vector, _read_set_partial) = self.interpreter.execute(request, result.clone(), &mut locked_store)?;
+
+        // Apply the operations to the store
+        VersionedInterpreter::apply_operations(&mut locked_store, &mut locked_versions, op_vector);
 
         Ok(result.decision)
     }
