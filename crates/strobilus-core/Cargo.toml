@@ -10,7 +10,6 @@ lalrpop = "0.22.2"
 cedar-policy-core = { workspace = true }
 imbl = "7.0.1"
 lalrpop-util = "0.22.2"
-parking_lot = "0.12.5"
 smol_str = "0.3.2"
 thiserror = "2.0.12"
 tokio = { version = "1.40", features = ["rt"] }

@@ -181,10 +181,10 @@ impl OptimisticAuthorizer {
     ) -> Result<Decision, Box<dyn std::error::Error>> {
         
         // Clone the Version Hashmap when starting transaction
-        let old_versions = self.interpreter.get_versions();
+        let old_versions = self.interpreter.get_versions()?;
 
         // Clone the store and get the reference to the inner Entities
-        let mut store_clone = self.interpreter.get_store_clone();
+        let mut store_clone = self.interpreter.try_get_store_clone()?;
         let entities_ref = store_clone.get_entities_ref();
 
         // Evaluate request on the entities
@@ -218,8 +218,8 @@ impl OptimisticAuthorizer {
     ) -> Result<Decision, Box<dyn std::error::Error>> {
         // Get locked entities store and locked version hashmap at start
         // They are kept during request execution to create the critical section
-        let mut locked_store= self.interpreter.get_locked_store();
-        let mut locked_versions = self.interpreter.get_locked_versions();
+        let mut locked_store= self.interpreter.get_locked_store()?;
+        let mut locked_versions = self.interpreter.get_locked_versions()?;
 
         // Clone the store and get the reference to the inner Entities
         let entities_ref = locked_store.get_entities_ref();
@@ -238,7 +238,7 @@ impl OptimisticAuthorizer {
 }
 
 
-// Struct added to differentiate validation error from other types
+// Struct used to differentiate validation error from other types
 #[derive(Debug)]
 pub struct RetryableValidationError;
 

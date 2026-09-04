@@ -251,7 +251,7 @@ fn remove_jusification(es: &mut BasicEntityStore) {
 // ---------------------------------- INNER INTERPRETER + VERSIONED INTERPRETER IMPLEMENTATION ----------------------------------
 
 use imbl::HashMap;
-use parking_lot::RwLock;
+use std::{fmt, sync::{RwLock, RwLockReadGuard, RwLockWriteGuard}};
 use crate::entities::store::OptimisticEntityStore;
 use crate::authorizer::RetryableValidationError;
 
@@ -269,6 +269,20 @@ pub enum StoreOp {
     UpdateAttribute {uid: EntityUID, key: SmolStr, value: Value},
     RemoveAttribute {uid: EntityUID, key: SmolStr}
 }
+
+// Struct used to define lock poison error
+#[derive(Debug)]
+pub struct PoisonedLockError {
+    lock_name: &'static str,
+}
+
+impl fmt::Display for PoisonedLockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} lock is poisoned; shared state may be inconsistent", self.lock_name)
+    }
+}
+
+impl std::error::Error for PoisonedLockError {}
 
 #[derive(Debug, Clone)]
 pub struct VersionHashmap {
@@ -304,12 +318,6 @@ impl VersionHashmap {
         self.map.insert(Arc::new(uid.clone()), self.get_version_value(uid) + 1);
     }
 
-    fn increase_version_bulk(&mut self, write_set: HashSet<EntityUID>) {
-        for uid in write_set{
-            self.increase_version(&uid);
-        }
-    }
-
 }
 
 /// Struct that contains Entity store, versions hashmap and obligations
@@ -335,14 +343,26 @@ impl VersionedInterpreter {
         }
     }
 
-    /// Return the current versions map
-    pub fn get_versions(&self) -> VersionHashmap {
-        self.versions.read().clone()
+    /// Helper used to acquire and unwrap a read lock
+    fn read_lock<'a,T>(lock: &'a RwLock<T>, lock_name: &'static str) 
+    -> Result<RwLockReadGuard<'a, T>, PoisonedLockError> {
+        lock.read().map_err(|_| PoisonedLockError { lock_name })
+    }
+    
+    /// Helper used to acquire and unwrap a write lock
+    fn write_lock<'a,T>(lock: &'a RwLock<T>, lock_name: &'static str) 
+    -> Result<RwLockWriteGuard<'a, T>, PoisonedLockError> {
+        lock.write().map_err(|_| PoisonedLockError { lock_name })
     }
 
-    pub fn get_locked_versions(&self)
-    -> parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, VersionHashmap> {
-        self.versions.write()
+    /// Return the current versions map
+    pub fn get_versions(&self) -> Result<VersionHashmap, PoisonedLockError> {
+        Ok(Self::read_lock(&self.versions, "versions")?.clone())
+    }
+
+    /// Returns the locked versions map
+    pub fn get_locked_versions(&self) -> Result<RwLockWriteGuard<'_, VersionHashmap>, PoisonedLockError> {
+        Self::write_lock(&self.versions, "versions")
     }
 
     /// Get a copy of the entities, consuming the actual store
@@ -353,13 +373,22 @@ impl VersionedInterpreter {
     /// Clones the entities store
     /// WARNING: MIGHT BE VERY TIME CONSUMING
     pub fn get_store_clone(&self) -> BasicEntityStore {
-        self.entity_store.read().clone()
+        self.try_get_store_clone()
+        .expect("entity store lock poisoned; refusing to expose potentially inconsistent entities")
+    }
+
+    pub fn try_get_store_clone(&self) 
+    -> Result<BasicEntityStore, PoisonedLockError> {
+        Ok(Self::read_lock(
+            &self.entity_store,
+            "entity_store",
+        )?
+        .clone())
     }
 
     /// Returns a locked version of the entity store 
-    pub fn get_locked_store(&self) 
-    -> parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, BasicEntityStore> {
-        self.entity_store.write()
+    pub fn get_locked_store(&self) -> Result<RwLockWriteGuard<'_, BasicEntityStore>, PoisonedLockError> {
+        Self::write_lock(&self.entity_store, "entity_store")
     }
 
     /// Applies vector of StoreOp to locked entity store
@@ -408,8 +437,8 @@ impl VersionedInterpreter {
         op_vector: Vec<StoreOp>,
         read_set: HashSet<EntityUID>
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut locked_store = self.get_locked_store();
-        let mut locked_versions = self.get_locked_versions();
+        let mut locked_store = self.get_locked_store()?;
+        let mut locked_versions = self.get_locked_versions()?;
         let mut error_flag = false;
     
         // Check every uid in read_set

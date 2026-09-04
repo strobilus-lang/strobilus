@@ -150,8 +150,7 @@ impl OptimisticWrapper {
 // ---------------------------------- MUTEX AUTHORIZER IMPLEMENTATION ----------------------------------
 
 
-use std::sync::Arc;
-use parking_lot::RwLock;
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
 pub struct PessimisticAuthorizer {
@@ -170,11 +169,19 @@ impl PessimisticAuthorizer {
     }
 
     pub fn is_authorized(&mut self, request: Request) -> Decision {
-        self.authorizer.write().is_authorized(request)
+        match self.authorizer.write() {
+            Ok(mut authorizer) => authorizer.is_authorized(request),
+            Err(_) => Decision::Deny,
+        }
     }
 
     pub fn to_json_value(&self) -> Result<serde_json::Value, cedar_policy_core::entities::err::EntitiesError> {
-        self.authorizer.read().to_json_value()
+        self.authorizer
+            .read()
+            .expect(
+                "authorizer lock poisoned; refusing to expose potentially inconsistent entities",
+            )
+            .to_json_value()
     }
 }
 
