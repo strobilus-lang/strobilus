@@ -556,10 +556,10 @@ impl VersionedInterpreter {
             }
         }
 
-        remove_jusification(store_clone);
-
         // Extract the read set from the ref used in evaluation
         let read_set_partial = store_clone.get_entities_ref().extract_read_set();
+
+        remove_jusification(store_clone);
 
         // Empty the read set to avoid polluting it
         store_clone.get_entities_ref().empty_read_set();
